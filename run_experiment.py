@@ -20,17 +20,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from data_loader import CITIES, load_raw                       # noqa: E402
 from evaluation import chronological_split                      # noqa: E402
-from experiment import (CV_TEST_BLOCK, CV_TRAIN_FRAC, TOLERANCE,  # noqa: E402
-                        baseline_comparison, cv_minimum_sufficient_window,
-                        cv_summary, fold_win_counts, minimum_sufficient_window,
-                        robustness_check, run_cv_experiment, run_experiment,
-                        sensitivity_analysis)
+from experiment import (CV_TEST_BLOCK, CV_TRAIN_FRAC, FINE_CV_TEST_BLOCK,  # noqa: E402
+                        FINE_CV_WINDOWS, TOLERANCE, baseline_comparison,
+                        cv_minimum_sufficient_window, cv_summary, fold_win_counts,
+                        minimum_sufficient_window, paired_diff_summary,
+                        paired_fold_differences, robustness_check,
+                        run_cv_experiment, run_experiment, sensitivity_analysis)
 from features import HISTORY_WINDOWS, build_aligned_tables, split_X_y  # noqa: E402
 from models import RANDOM_SEED, get_models                      # noqa: E402
 from preprocessing import audit_series, preprocess, print_audit  # noqa: E402
 from visualization import (FIG_DIR, generate_all,                 # noqa: E402
                            plot_cv_fold_detail, plot_cv_summary,
-                           plot_forecast, plot_robustness)
+                           plot_forecast, plot_paired_differences,
+                           plot_robustness)
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 PROCESSED_DIR = Path(__file__).resolve().parent / "data" / "processed"
@@ -165,6 +167,51 @@ def main(city: str):
     out = FIG_DIR / "forecast_actual_vs_predicted.png"
     plot_forecast((te["date"].values, te["target"].values), preds, out, best_model)
     print(f"  wrote {out.relative_to(Path.cwd())}")
+
+    banner("STEP 9: TARGETED FOLLOW-UP — FINE-GRAINED CV FOR WINDOWS {1, 2, 4}")
+    print("  Reuses the SAME aligned base (align_windows=HISTORY_WINDOWS, n=924,")
+    print(f"  min_train={min_train}) as the committed 10-fold/26-week CV above.")
+    print("  Only test_block and the trained window set change, to sharpen the")
+    print("  still-unresolved 1-vs-2-vs-4 comparison. Windows 8/12 excluded: already")
+    print("  resolved as worse. The committed cv_* outputs above are untouched.")
+    fine_n_folds_expected = (n_aligned - min_train) // FINE_CV_TEST_BLOCK
+    print(f"\n  windows={FINE_CV_WINDOWS} | test_block={FINE_CV_TEST_BLOCK} weeks "
+          f"| folds={fine_n_folds_expected} (vs 10 in the committed run)")
+
+    fine_cv_results = run_cv_experiment(series, FINE_CV_WINDOWS, test_block=FINE_CV_TEST_BLOCK,
+                                         align_windows=HISTORY_WINDOWS)
+    fine_bounds = (fine_cv_results[["fold", "fold_test_start", "fold_test_end"]]
+                   .drop_duplicates().sort_values("fold"))
+    print("\n  fold test-block boundaries (fine-grained run):")
+    print(fine_bounds.to_string(index=False))
+
+    fine_summary = cv_summary(fine_cv_results)
+    print(f"\n  fine-grained CV summary (mean +/- std across {fine_n_folds_expected} folds):")
+    print(fine_summary.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+    fine_wins = fold_win_counts(fine_cv_results)
+    print("\n  fine-grained fold win counts:")
+    print(fine_wins.to_string(index=False, float_format=lambda v: f"{v:.1f}"))
+
+    fine_mins = cv_minimum_sufficient_window(fine_summary)
+    print(f"\n  fine-grained minimum sufficient window (tolerance={TOLERANCE:.0%}):")
+    print(fine_mins.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+    paired = paired_fold_differences(fine_cv_results)
+    paired_summ = paired_diff_summary(paired)
+    print("\n  paired per-fold MAE differences (A - B; negative = A better that fold):")
+    print(paired_summ.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+    fine_cv_results.to_csv(RESULTS_DIR / "fine_cv_results.csv", index=False)
+    fine_summary.to_csv(RESULTS_DIR / "fine_cv_summary.csv", index=False)
+    fine_wins.to_csv(RESULTS_DIR / "fine_cv_fold_win_counts.csv", index=False)
+    fine_mins.to_csv(RESULTS_DIR / "fine_cv_minimum_sufficient_window.csv", index=False)
+    paired.to_csv(RESULTS_DIR / "fine_cv_paired_differences.csv", index=False)
+    paired_summ.to_csv(RESULTS_DIR / "fine_cv_paired_diff_summary.csv", index=False)
+
+    fine_fig_out = FIG_DIR / "fine_cv_paired_differences.png"
+    plot_paired_differences(paired_summ, fine_fig_out)
+    print(f"  wrote {fine_fig_out.relative_to(Path.cwd())}")
 
     banner("DONE")
     print(f"Results  -> {RESULTS_DIR}")

@@ -235,6 +235,59 @@ def plot_cv_fold_detail(cv_results, outfile):
     plt.close(fig)
 
 
+def plot_paired_differences(paired_summary, outfile, pair_order=((1, 2), (1, 4), (2, 4))):
+    """
+    Mean paired MAE difference (+/-1 std) per window pair and model, with a
+    zero reference line. Pairing cancels the fold-shared (mostly outbreak-
+    driven) noise, so this is a sharper view than the raw mean +/- std CV
+    chart for the specific {1, 2, 4} question. If a pair's error bar
+    crosses zero, the paired comparison cannot -- on average -- tell which
+    window in that pair is better; that overlap is the point of the plot.
+    """
+    pair_labels = [f"{a} vs {b} weeks" for a, b in pair_order]
+    x = list(range(len(pair_order)))
+    width = 0.16
+
+    fig, ax = plt.subplots(figsize=(10.5, 5.2), dpi=150)
+    fig.patch.set_facecolor("#fcfcfb")
+    ax.set_facecolor("#fcfcfb")
+
+    for i, (name, color) in enumerate(SERIES_COLORS.items()):
+        sub = paired_summary[paired_summary["model"] == name]
+        means, stds = [], []
+        for a, b in pair_order:
+            row = sub[(sub["window_a"] == a) & (sub["window_b"] == b)]
+            means.append(row["mean_diff"].iloc[0] if len(row) else float("nan"))
+            stds.append(row["std_diff"].iloc[0] if len(row) else float("nan"))
+        offset = (i - 0.5) * width * 2
+        xs = [xi + offset for xi in x]
+        ax.errorbar(xs, means, yerr=stds, fmt="o", color=color, markersize=8,
+                    markeredgecolor="#fcfcfb", markeredgewidth=1.3, capsize=4,
+                    elinewidth=1.4, ecolor=color, label=name, zorder=3)
+
+    ax.axhline(0, color=TEXT_SECONDARY, linewidth=1.2, zorder=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(pair_labels)
+    ax.set_xlim(-0.6, len(pair_order) - 0.4)
+    ax.set_xlabel("Window pair (A vs B)", fontsize=10, color=TEXT_SECONDARY)
+    ax.set_ylabel("Paired MAE difference, A − B (cases)", fontsize=10, color=TEXT_SECONDARY)
+    ax.set_title("Paired fold-level MAE differences (±1 std) — crossing zero = no consistent direction",
+                 fontsize=11.5, color=TEXT_PRIMARY, pad=12, loc="left", fontweight="bold")
+    ax.grid(axis="y", color=GRID, linewidth=0.8, alpha=0.7)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(GRID)
+    ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
+    leg = ax.legend(frameon=False, fontsize=9, loc="best")
+    for t in leg.get_texts():
+        t.set_color(TEXT_SECONDARY)
+    fig.tight_layout()
+    fig.savefig(outfile, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
 def generate_all(results, fig_dir=FIG_DIR):
     fig_dir.mkdir(parents=True, exist_ok=True)
     written = []

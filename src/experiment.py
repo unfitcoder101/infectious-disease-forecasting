@@ -42,6 +42,28 @@ CV_TRAIN_FRAC = 0.70
 CV_TEST_BLOCK = 26
 CV_FOLD_TARGET = (8, 10)
 
+# --- Fine-grained follow-up CV: resolving 1 vs 2 vs 4 weeks -----------------
+# A SEPARATE, narrower rolling-origin CV pass, run ALONGSIDE (never replacing)
+# the CV_TRAIN_FRAC/CV_TEST_BLOCK config above. The committed 10-fold/26-week
+# run already resolved "short (1-4) vs long (8-12)"; it could NOT resolve
+# which of {1, 2, 4} is shortest-sufficient (those three sit within one
+# fold-level std of each other). This config trades block length for more
+# folds -- i.e. a smaller standard error on the mean -- specifically to
+# sharpen THAT remaining question. Same aligned base (n=924), same min_train
+# (646, same 70% floor) as the committed run; only test_block and the window
+# set actually trained change.
+#
+#   available  = 924 - 646 = 278 weeks (identical to the committed run)
+#   test_block = 13 weeks (one calendar quarter -- exactly half the original
+#                26-week block: a principled halving, not an arbitrary
+#                shrink, and still a recognizable epidemiological unit)
+#   n_folds    = 278 // 13 = 21   (21*13=273 <= 278 < 22*13=286)
+#   leftover   = 278 - 273 = 5 weeks, unused
+# Windows 8 and 12 are already resolved as worse and are excluded here --
+# the sole purpose of this pass is to separate {1, 2, 4}.
+FINE_CV_TEST_BLOCK = 13
+FINE_CV_WINDOWS = [1, 2, 4]
+
 
 def _median_timed(fn, repeats=N_TIMING_REPEATS):
     """Run fn repeatedly, return (result_of_last_run, median seconds)."""
@@ -95,7 +117,8 @@ def run_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS) -> pd.DataFram
 
 
 def run_cv_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS,
-                       train_frac=CV_TRAIN_FRAC, test_block=CV_TEST_BLOCK) -> pd.DataFrame:
+                       train_frac=CV_TRAIN_FRAC, test_block=CV_TEST_BLOCK,
+                       align_windows=None) -> pd.DataFrame:
     """
     Rolling-origin cross-validation: same window x model grid as
     run_experiment(), but scored on a SEQUENCE of non-overlapping future
@@ -110,8 +133,23 @@ def run_cv_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS,
     correct if run on a different city with a different series length --
     though see research_notes.md for a caveat about short series where the
     8-10 fold target cannot be met at this block size (e.g. Iquitos).
+
+    align_windows: the window set used ONLY to compute the common-date
+    alignment (build_aligned_tables), separate from `windows` (the windows
+    actually trained/evaluated). Defaults to `windows` itself -- i.e. by
+    default this behaves EXACTLY as before, byte-for-byte, since passing
+    nothing here makes align_windows == windows, same as the old
+    single-argument alignment call. Pass a WIDER set (e.g. the full
+    HISTORY_WINDOWS) to align against the same 924-row date range as a
+    different experiment even when `windows` itself is a narrower subset --
+    this is how the fine-grained {1, 2, 4} follow-up keeps the identical
+    aligned base as the committed 10-fold/26-week run instead of silently
+    re-aligning to a shorter run-up (which would shrink to 932 rows if
+    aligned against max({1,2,4})=4 alone).
     """
-    tables = build_aligned_tables(series, windows)
+    align_windows = list(windows) if align_windows is None else list(align_windows)
+    tables_full = build_aligned_tables(series, align_windows)
+    tables = {w: tables_full[w] for w in windows}
     n = len(tables[windows[0]])          # identical length for every window
     min_train = int(n * train_frac)
 
@@ -216,6 +254,78 @@ def cv_minimum_sufficient_window(summary: pd.DataFrame, tolerance=TOLERANCE) -> 
             minimum_sufficient_window=int(min_window_row["history_window"]),
             near_optimal_windows=", ".join(str(int(w)) for w in near["history_window"]),
             min_sufficient_within_1std_of_best=within_1std,
+        ))
+    return pd.DataFrame(out)
+
+
+def paired_fold_differences(cv_results: pd.DataFrame, pairs=((1, 2), (1, 4), (2, 4))) -> pd.DataFrame:
+    """
+    PAIRED per-fold MAE differences between two history windows.
+
+    WHY PAIRED, NOT INDEPENDENT
+    ----------------------------
+    Every window in a given CV run is scored on the SAME fold test-weeks
+    (guaranteed here by run_cv_experiment's align_windows mechanism, which
+    keeps all windows on one shared aligned base with identical positional
+    fold boundaries). Fold 5's MAE for window=1 and fold 5's MAE for
+    window=4 are therefore measured on the exact same held-out weeks.
+
+    Most of the huge fold-to-fold variance already documented (a quiet
+    26-week block ~2.4 MAE vs an outbreak block ~20+ MAE) is a property of
+    THAT FOLD, not of the window -- an outbreak in a fold makes every
+    window's forecast harder in that fold. Comparing window MEANS as if
+    they were independent samples leaves all of that shared noise in place.
+    Comparing the PAIRED DIFFERENCE (window_a's MAE minus window_b's MAE,
+    fold by fold) cancels the part of the noise common to both windows in
+    that fold, isolating the window-specific effect -- the more targeted
+    signal for a question this fine (observed differences of ~0.04-0.3 MAE,
+    far smaller than the ~4-5 MAE fold-to-fold noise).
+
+    Returns one row per (model, window_a, window_b, fold) with MAE_a,
+    MAE_b, and diff = MAE_a - MAE_b. A negative diff means window_a (the
+    shorter window, listed first in each pair) had LOWER error in that fold.
+    """
+    model_rows = cv_results[~cv_results["model"].str.startswith("Persistence")]
+    out = []
+    for model in model_rows["model"].unique():
+        sub = model_rows[model_rows["model"] == model]
+        pivot = sub.pivot(index="fold", columns="history_window", values="MAE")
+        for wa, wb in pairs:
+            if wa not in pivot.columns or wb not in pivot.columns:
+                continue
+            diff = pivot[wa] - pivot[wb]
+            for fold in pivot.index:
+                out.append(dict(
+                    model=model, window_a=wa, window_b=wb, fold=int(fold),
+                    MAE_a=pivot.loc[fold, wa], MAE_b=pivot.loc[fold, wb],
+                    diff=diff.loc[fold],
+                ))
+    return pd.DataFrame(out)
+
+
+def paired_diff_summary(paired: pd.DataFrame) -> pd.DataFrame:
+    """
+    Summarize paired differences per (model, window_a, window_b): mean/std
+    of the paired diff, and how often window_a beat window_b (diff < 0)
+    across folds -- a simple, transparent sign-consistency check.
+
+    A win rate close to 50% means the folds DISAGREE with each other about
+    which window is better in that pair -- i.e. no consistent direction,
+    which is direct evidence the comparison is not resolved (not merely
+    "not yet significant"). A win rate strongly away from 50%, together
+    with a mean_diff clearly outside +/-1 std_diff of zero, is what
+    consistent, resolvable evidence would look like.
+    """
+    out = []
+    for (model, wa, wb), g in paired.groupby(["model", "window_a", "window_b"]):
+        n = len(g)
+        wins_a = int((g["diff"] < 0).sum())   # window_a strictly lower MAE that fold
+        ties = int((g["diff"] == 0).sum())
+        out.append(dict(
+            model=model, window_a=int(wa), window_b=int(wb), n_folds=n,
+            mean_diff=g["diff"].mean(), std_diff=g["diff"].std(),
+            wins_a=wins_a, wins_b=n - wins_a - ties, ties=ties,
+            win_rate_a_pct=100 * wins_a / n,
         ))
     return pd.DataFrame(out)
 
