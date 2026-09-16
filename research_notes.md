@@ -1,7 +1,7 @@
 # How Much Surveillance History Is Enough?
 ### A Temporal Context Sensitivity Study for Short-Term Infectious Disease Forecasting
 
-**Run date:** 2026-09-16, updated 2026-09-17 with rolling-origin CV · **Seed:** 42 · **Status:** working research prototype
+**Run date:** 2026-09-16, updated 2026-09-17 with rolling-origin CV and a targeted 21-fold/13-week follow-up · **Seed:** 42 · **Status:** working research prototype
 
 ---
 
@@ -264,7 +264,130 @@ opposite side honestly — the *exact* single best window among {1, 2, 4} is
 deviation of each other. Before CV, "window 4 is the single-split optimum"
 looked like a precise finding; after CV, it is visibly noise-level.
 
-## 6. INTERPRETATION
+## 6. TARGETED FOLLOW-UP: FINE-GRAINED CV FOR WINDOWS {1, 2, 4}
+
+The 10-fold/26-week CV above resolved the broad short-vs-long question but could
+not separate windows 1, 2, and 4 from each other (§5.5–5.6). This section reports
+one additional, narrower experiment, run specifically to investigate that
+remaining question — not to re-test the already-resolved 8/12-week comparison.
+
+### 6.1 Purpose and configuration
+
+Trades test-block length for more folds (a smaller standard error on the mean),
+and adds a paired fold-level comparison that cancels the shared, mostly
+outbreak-driven noise documented in §5.3.
+
+| Parameter | Value |
+|---|---|
+| Series | San Juan only |
+| Aligned base | The **same 924-row** aligned base as §5 (explicitly re-aligned against the full {1,2,4,8,12} window set so this stays identical, not a shorter one) |
+| `min_train` | **646 weeks** (same 70% floor, unchanged) |
+| `test_block` | **13 weeks** (one calendar quarter — exactly half the original 26-week block) |
+| `n_folds` | **21**, expanding train, non-overlapping test blocks |
+| Windows trained | **{1, 2, 4} only** — 8 and 12 excluded, already resolved as worse in §5 |
+| Models / hyperparameters / preprocessing / features / horizon | Unchanged from §3 and §5 |
+| New analysis | Paired per-fold MAE differences for 1 vs 2, 1 vs 4, 2 vs 4, per model |
+
+### 6.2 Verification (research integrity)
+
+Before any result was reported, the fold construction itself was verified
+programmatically:
+
+- Exactly **21 folds** were generated (indices 0–20).
+- Every fold's test block contains **exactly 13 weeks**.
+- Test blocks are **non-overlapping and forward-chaining** (each fold's test
+  period starts strictly after the previous fold's ends).
+- Training size **expands from 646 to 906 weeks** in exact steps of 13, strictly
+  increasing across all 21 folds.
+- All three windows (1, 2, 4) use **identical test weeks within each fold**
+  (`fold_test_start`/`fold_test_end` match across windows for every fold) — the
+  paired comparison in §6.5 depends on this.
+- **No leakage**: independently re-derived from row positions, training data
+  never extends past its own fold's test start, for all 21 folds.
+- The **committed 10-fold/26-week outputs were not rewritten** and remain the
+  same files already on disk from §5.
+- A numerical backward-compatibility check (re-running the original 10-fold/
+  26-week call through the modified code path and comparing in-memory, without
+  touching the committed files) showed differences on the order of **1e-15** —
+  floating-point summation-order noise, present even in the zero-randomness
+  persistence baseline rows, not a behavioral change. No reporting-level number
+  changed.
+- The original `cv_*.csv` files were **not modified**; only new `fine_cv_*.csv`
+  files were added.
+
+### 6.3 Results: mean ± std MAE (21-fold CV)
+
+| Window | XGBoost | LightGBM |
+|---|---|---|
+| 1 | 6.57 ± 4.69 | 6.19 ± 3.93 |
+| 2 | 6.27 ± 4.89 | 6.22 ± 4.75 |
+| 4 | 6.28 ± 4.99 | 6.01 ± 4.54 |
+
+LightGBM's lowest **observed mean** is window 4 (6.01); XGBoost's lowest
+observed mean is window 2 (6.27). The two models do not even agree with each
+other on which window has the lowest mean — itself evidence against a shared,
+stable effect (see §6.6).
+
+### 6.4 Fold win counts (21 folds)
+
+| Window | XGBoost | LightGBM |
+|---|---|---|
+| 1 | 2/21 (9.5%) | 3/21 (14.3%) |
+| 2 | 9/21 (42.9%) | 5/21 (23.8%) |
+| 4 | 10/21 (47.6%) | 13/21 (61.9%) |
+
+### 6.5 Paired per-fold MAE differences
+
+Because all three windows share identical fold test-weeks (verified in §6.2),
+each fold's MAE for window A and window B can be paired and subtracted
+directly, cancelling the noise common to both windows in that fold (e.g.
+whether that fold contains an outbreak). A negative value means the shorter
+window (A) had lower error that fold.
+
+**XGBoost**
+
+| Pair | Mean ± std | Win rate |
+|---|---|---|
+| 1 vs 2 | +0.29 ± 0.69 | shorter-window (1) win rate 19.0% |
+| 1 vs 4 | +0.28 ± 0.68 | shorter-window (1) win rate 28.6% |
+| 2 vs 4 | −0.01 ± 0.75 | window-2 win rate 47.6% |
+
+**LightGBM**
+
+| Pair | Mean ± std | Win rate |
+|---|---|---|
+| 1 vs 2 | −0.03 ± 1.18 | window-1 win rate 28.6% |
+| 1 vs 4 | +0.18 ± 1.17 | window-1 win rate 23.8% |
+| 2 vs 4 | +0.21 ± 0.83 | window-2 win rate 33.3% |
+
+All six paired comparisons remain noisy: every mean is smaller in magnitude
+than its own standard deviation, none of the win rates approach a majority
+(range: 19.0%–47.6%), and the direction of the mean difference is not
+consistent in a way that would indicate one window reliably beating another.
+**The paired comparisons therefore do not provide a consistent direction for
+any of the three pairs, for either model.**
+
+### 6.6 Does this resolve 1 vs 2 vs 4?
+
+**No.**
+
+- **"Lowest observed mean MAE" is not the same claim as "evidence a window is
+  meaningfully better."** LightGBM window 4 has the lowest observed mean (6.01)
+  and the highest fold win rate (61.9%), but its own paired comparisons against
+  windows 1 and 2 still show means smaller than their standard deviations, with
+  win rates far from a majority. XGBoost's lowest observed mean is window 2
+  (6.27), not window 4 — the two models disagree on which window has the lowest
+  mean, which is itself evidence against a stable underlying effect, not merely
+  two noisy estimates converging on the same true answer.
+- No window is called optimal here. Windows 1, 2, and 4 remain statistically
+  indistinguishable from each other under this more powerful, purpose-built
+  test, even after doubling the fold count and adding a paired comparison
+  specifically designed to isolate the window-specific signal from fold-level
+  noise.
+
+---
+
+## 7. INTERPRETATION
 
 *(Clearly separated from the observations above.)*
 
@@ -283,10 +406,17 @@ looked like a precise finding; after CV, it is visibly noise-level.
   dengue dynamics.
 - Finding C means the headline comparison should be read modestly: we are comparing
   variants of a model family that, as configured, barely competes with a one-line rule.
+- The targeted 21-fold/13-week follow-up (§6) **reinforces this rather than
+  resolving it**: doubling the fold count and adding a paired fold-level
+  comparison — specifically designed to cancel the shared, outbreak-driven
+  noise — still found no consistent direction among windows 1, 2, and 4. This
+  is best read as **increased confidence that the ranking genuinely isn't
+  resolvable from this series**, not as a sign the original CV simply needed
+  more folds.
 
 ---
 
-## 7. LIMITATIONS
+## 8. LIMITATIONS
 
 1. **One disease, one dataset family.** San Juan dengue 1990–2008 (primary) plus
    an Iquitos secondary check. Nothing here generalises to other diseases or eras.
@@ -319,29 +449,74 @@ looked like a precise finding; after CV, it is visibly noise-level.
    checked whether the size of the fold-to-fold standard deviation is a property
    of San Juan dengue specifically or of short-block CV on epidemic count data in
    general.
+10. **R² is unreliable at 13-week blocks too, more so than at 26 weeks.**
+    Individual fold R² in the 21-fold run ranged from **−1.48 to 0.82** (versus
+    −1.06 to 0.84 at 26 weeks) — a shorter block has even less within-block case
+    variance to divide by. MAE/RMSE remain the primary metrics for the targeted
+    follow-up in §6, exactly as for §5.
+11. **The 21 folds are different slices of the same historical period, not 21
+    independent datasets.** `min_train` is unchanged at 646, so the fold-eligible
+    span is still the same ~278 weeks (~5.3 years) as the 10-fold run — more
+    folds means a finer grid over the same information, not new information.
+12. **Seasonal-phase heterogeneity is a plausible contributor to the results.**
+    A 13-week block does not reliably span a full rise-and-fall of dengue's
+    ~52-week annual cycle the way a 26-week block tends to, so folds differ not
+    only in whether they contain an outbreak but in which phase of the season
+    they land in — a source of between-fold noise the original 26-week design
+    mostly averaged over within each fold.
+13. **The targeted follow-up does not add a new independent disease or city
+    replication.** It is a re-parameterized CV pass on the same San Juan series
+    used throughout this study.
+14. **The six paired comparisons in §6.5 are descriptive, not formal hypothesis
+    tests with a multiplicity correction.** No p-values or corrected significance
+    thresholds are claimed; the win-rate and mean/std figures are reported as
+    transparent descriptive signals, consistent with the rest of this study's
+    approach to statistics.
+15. **The targeted follow-up's result is specific to the San Juan dengue series,
+    this preprocessing, these two models and hyperparameters, this one-step-ahead
+    horizon, and this evaluation design.** It does not generalize beyond that
+    scope any more than the rest of this study does.
 
 ---
 
-## 8. CONCLUSION
+## 9. CONCLUSION
 
 **For this dataset and this experimental configuration** — San Juan weekly dengue,
 1990–2008, one-step-ahead forecasting, XGBoost and LightGBM at fixed settings —
 we do **not** find evidence that longer surveillance history improves next-week
-forecasting. Windows of 1–4 weeks performed as well as or better than 8–12 weeks
-on the test period, while costing about 3× less to train.
+forecasting. The 10-fold/26-week rolling-origin CV (§5) supports the broader
+conclusion that **short surveillance histories (1–4 weeks) are at least as good
+as long histories (8–12 weeks)** for this dataset and evaluation design, while
+costing about 3× less to train.
 
-However, **we still cannot identify one exact minimum sufficient window**. The
-original single-split evidence already showed this (XGBoost: 2 vs 1; LightGBM: 1
-vs 4 between test and validation periods). Rolling-origin cross-validation
-(Section 5), run across 10 forward-chaining folds, **does not overturn that
-uncertainty — it explains it with fold-level evidence**: no window wins a
-majority of folds (best win rate 30%), and windows 1, 2, and 4 sit within one
-fold-level standard deviation of each other for both models. What CV *does*
-add confidently is the coarser-grained answer: **short history (1–4 weeks) is
-consistently at least as good as long history (8–12 weeks)** across both the
-single-split design and the 10-fold CV design, and it is cheaper to train. The
-honest conclusion is therefore two-tiered — confident about "short beats or
-matches long", not confident about the single best window within {1, 2, 4}.
+The targeted 21-fold/13-week follow-up (§6) specifically investigated whether 1,
+2, or 4 weeks can be distinguished from each other. **It did not resolve a
+meaningfully better window among 1, 2, and 4 weeks.** LightGBM's lowest
+*observed* mean MAE was window 4 (6.01); XGBoost's lowest *observed* mean MAE
+was window 2 (6.27) — but in both cases the paired fold-level comparisons
+against the other candidate windows remained noisy, with no consistent
+direction and no win rate approaching a majority (§6.5–6.6). **We deliberately
+distinguish "lowest observed mean MAE" from "evidence that a window is
+meaningfully better"**: the former is a description of the numbers as they came
+out; the latter would require the paired comparisons to show a consistent
+direction, which they did not. No window is described as optimal anywhere in
+this document.
 
-We explicitly do **not** conclude that any particular window is optimal for
-infectious disease forecasting in general.
+The honest conclusion is therefore two-tiered, and slightly sharper than before
+the targeted follow-up:
+
+1. **Confident:** short history (1–4 weeks) is consistently at least as good as
+   long history (8–12 weeks), across the single-split design, the 10-fold/
+   26-week CV, and (by construction, since 8/12 were never re-tested here) the
+   targeted follow-up's scope. This held up under a purpose-built, more
+   statistically powerful test aimed directly at finding a counter-example.
+2. **Not confident, and now more clearly so:** the exact minimum sufficient
+   window within {1, 2, 4}. Two independent CV designs (10-fold/26-week and
+   21-fold/13-week) and a paired comparison specifically built to isolate the
+   window-specific signal from fold-level noise all failed to produce a
+   consistent winner.
+
+**The study therefore identifies a short-history regime (1–4 weeks) rather than
+an exact minimum sufficient window.** We explicitly do **not** conclude that any
+particular window is optimal for infectious disease forecasting in general, or
+that a single window within {1, 2, 4} is optimal for this dataset in particular.

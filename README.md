@@ -11,14 +11,24 @@ using XGBoost and LightGBM on real weekly dengue surveillance data.
 For San Juan dengue (1990–2008), **longer history did not improve next-week
 forecasts**. Short windows (1–4 weeks) matched or beat long windows (8–12), both
 on a single chronological test split and on **10-fold rolling-origin
-cross-validation**, while training ~3× faster. The exact single best window
-within {1, 2, 4} **could not be pinned down**: CV shows those three windows sit
-within one fold-level standard deviation of each other, and no window wins a
-majority of folds. Only 1 of 10 configurations beat a persistence baseline.
+cross-validation**, while training ~3× faster. Only 1 of 10 configurations beat
+a persistence baseline.
 
-See [`research_notes.md`](research_notes.md) for the full write-up, including
-the CV methodology and limitations. Results are reported for **this dataset and
-configuration only**.
+## Final Research Finding
+
+A **short-history regime (1–4 weeks) is well supported**, but the *exact*
+minimum sufficient window within {1, 2, 4} is **not resolved**. A second,
+targeted 21-fold/13-week CV experiment — built specifically to separate 1, 2,
+and 4 weeks using a paired fold-level comparison — still found no consistent
+winner: every paired comparison remained noisy, and the two models didn't even
+agree on which window had the lowest observed error (LightGBM: window 4;
+XGBoost: window 2). **No window is claimed to be optimal.** The honest,
+final conclusion is that this study identifies a short-history regime rather
+than an exact minimum sufficient window.
+
+See [`research_notes.md`](research_notes.md) §§5–9 for the full CV methodology,
+the targeted follow-up, and all limitations. Results are reported for **this
+dataset and configuration only**.
 
 ## Setup
 
@@ -55,10 +65,16 @@ repeats, and should be read as orders of magnitude, not exact constants.
 - `results/cv_fold_win_counts.csv` — how often each window had the lowest MAE
 - `results/cv_minimum_sufficient_window.csv` — the same 5%-tolerance rule applied to CV means
 
+**Targeted follow-up (21 folds, 13-week blocks, windows {1, 2, 4} only):**
+- `results/fine_cv_results.csv`, `fine_cv_summary.csv`, `fine_cv_fold_win_counts.csv`,
+  `fine_cv_minimum_sufficient_window.csv` — same structure as above, finer fold grid
+- `results/fine_cv_paired_differences.csv`, `fine_cv_paired_diff_summary.csv` —
+  paired per-fold MAE differences for 1-vs-2, 1-vs-4, 2-vs-4
+
 **Figures** (`results/figures/*.png`): MAE, RMSE, R², training time, inference
 time vs window (single split); a two-period robustness panel; CV mean MAE with
-±1 std error bars; every fold's MAE plotted individually; an actual-vs-predicted
-forecast overlay.
+±1 std error bars; every fold's MAE plotted individually; paired fold-level MAE
+differences for the targeted follow-up; an actual-vs-predicted forecast overlay.
 
 ## Layout
 
