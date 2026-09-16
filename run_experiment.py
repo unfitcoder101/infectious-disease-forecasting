@@ -20,13 +20,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from data_loader import CITIES, load_raw                       # noqa: E402
 from evaluation import chronological_split                      # noqa: E402
-from experiment import (TOLERANCE, baseline_comparison,          # noqa: E402
-                        minimum_sufficient_window, robustness_check,
-                        run_experiment, sensitivity_analysis)
+from experiment import (CV_TEST_BLOCK, CV_TRAIN_FRAC, TOLERANCE,  # noqa: E402
+                        baseline_comparison, cv_minimum_sufficient_window,
+                        cv_summary, fold_win_counts, minimum_sufficient_window,
+                        robustness_check, run_cv_experiment, run_experiment,
+                        sensitivity_analysis)
 from features import HISTORY_WINDOWS, build_aligned_tables, split_X_y  # noqa: E402
 from models import RANDOM_SEED, get_models                      # noqa: E402
 from preprocessing import audit_series, preprocess, print_audit  # noqa: E402
 from visualization import (FIG_DIR, generate_all,                 # noqa: E402
+                           plot_cv_fold_detail, plot_cv_summary,
                            plot_forecast, plot_robustness)
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
@@ -91,6 +94,46 @@ def main(city: str):
     sens.to_csv(RESULTS_DIR / "sensitivity_analysis.csv", index=False)
     mins.to_csv(RESULTS_DIR / "minimum_sufficient_window.csv", index=False)
 
+    banner("STEP 7d: ROLLING-ORIGIN CROSS-VALIDATION (the CV milestone)")
+    n_aligned = len(build_aligned_tables(series, HISTORY_WINDOWS)[max(HISTORY_WINDOWS)])
+    min_train = int(n_aligned * CV_TRAIN_FRAC)
+    n_folds_expected = (n_aligned - min_train) // CV_TEST_BLOCK
+    print(f"  aligned rows={n_aligned} | train_frac={CV_TRAIN_FRAC:.0%} -> min_train={min_train} "
+          f"| test_block={CV_TEST_BLOCK} weeks | folds={n_folds_expected}")
+    if not (8 <= n_folds_expected <= 10):
+        print(f"  NOTE: fold count {n_folds_expected} is outside the 8-10 target for this series "
+              f"length ({CITIES[city]}). Config was derived from San Juan; see research_notes.md.")
+
+    cv_results = run_cv_experiment(series, HISTORY_WINDOWS)
+    fold_bounds = (cv_results[["fold", "fold_test_start", "fold_test_end"]]
+                   .drop_duplicates().sort_values("fold"))
+    print("\n  fold test-block boundaries:")
+    print(fold_bounds.to_string(index=False))
+
+    summary = cv_summary(cv_results)
+    print("\n  CV summary (mean +/- std across folds):")
+    print(summary.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+    wins = fold_win_counts(cv_results)
+    print("\n  fold win counts (how often each window had the lowest MAE):")
+    print(wins.to_string(index=False, float_format=lambda v: f"{v:.1f}"))
+
+    cv_mins = cv_minimum_sufficient_window(summary)
+    print(f"\n  CV minimum sufficient window (tolerance={TOLERANCE:.0%}):")
+    print(cv_mins.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+    cv_results.to_csv(RESULTS_DIR / "cv_results.csv", index=False)
+    summary.to_csv(RESULTS_DIR / "cv_summary.csv", index=False)
+    wins.to_csv(RESULTS_DIR / "cv_fold_win_counts.csv", index=False)
+    cv_mins.to_csv(RESULTS_DIR / "cv_minimum_sufficient_window.csv", index=False)
+
+    banner("STEP 7e: DOES CV CHANGE THE CONCLUSION?")
+    for model in mins["model"]:
+        single_pick = int(mins.loc[mins["model"] == model, "minimum_sufficient_window"].iloc[0])
+        cv_pick = int(cv_mins.loc[cv_mins["model"] == model, "minimum_sufficient_window"].iloc[0])
+        agree = "SAME" if single_pick == cv_pick else "DIFFERENT"
+        print(f"  {model:9s}: single-split pick={single_pick:2d} weeks | CV pick={cv_pick:2d} weeks -> {agree}")
+
     banner("STEP 8: FIGURES")
     for p in generate_all(results):
         print(f"  wrote {p.relative_to(Path.cwd())}")
@@ -98,6 +141,14 @@ def main(city: str):
     rob_out = FIG_DIR / "robustness_two_periods.png"
     plot_robustness(results, rob_out)
     print(f"  wrote {rob_out.relative_to(Path.cwd())}")
+
+    cv_summary_out = FIG_DIR / "cv_mae_vs_history_window.png"
+    plot_cv_summary(summary, cv_summary_out)
+    print(f"  wrote {cv_summary_out.relative_to(Path.cwd())}")
+
+    cv_detail_out = FIG_DIR / "cv_fold_detail.png"
+    plot_cv_fold_detail(cv_results, cv_detail_out)
+    print(f"  wrote {cv_detail_out.relative_to(Path.cwd())}")
 
     # Forecast overlay: shortest vs longest window, for the better model overall.
     model_rows = results[~results["model"].str.startswith("Persistence")]

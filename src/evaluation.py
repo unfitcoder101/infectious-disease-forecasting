@@ -33,6 +33,59 @@ def chronological_split(table, train_frac=0.70, val_frac=0.15):
     return table.iloc[:i_train], table.iloc[i_train:i_val], table.iloc[i_val:]
 
 
+def rolling_origin_splits(table, min_train: int, test_block: int, n_folds: int | None = None):
+    """
+    ROLLING-ORIGIN (walk-forward) cross-validation splits.
+
+    WHY THIS EXISTS, ON TOP OF chronological_split()
+    -------------------------------------------------
+    chronological_split() gives ONE train/val/test cut, so "does history
+    length matter" gets answered by ONE fixed 139-week slice of the future.
+    robustness_check() (in experiment.py) already showed that the val-period
+    ranking and the test-period ranking of windows DISAGREE -- i.e. that one
+    slice is not representative of the next one. Rolling-origin CV is the
+    direct fix: instead of one test slice, we generate a SEQUENCE of them and
+    look at the whole distribution of scores per window, not a single point.
+
+    HOW A FOLD IS BUILT (expanding window, walk-forward)
+    ------------------------------------------------------
+    Fold i:
+        train = rows[0            : min_train + i*test_block]
+        test  = rows[min_train + i*test_block : min_train + (i+1)*test_block]
+
+    Two properties make this leakage-safe, same standard as chronological_split:
+      1. EXPANDING window: training data only ever grows forward in time and
+         never includes a row later than the fold's test block. This mirrors
+         how a real surveillance system accumulates history -- it never gets
+         to see next quarter's data early.
+      2. NON-OVERLAPPING test blocks: fold i's test rows and fold j's test
+         rows (i != j) never share a week. This keeps folds independent, so
+         averaging MAE across folds is not double-counting any observation.
+
+    Returns
+    -------
+    list of (fold_index, train_df, test_df), fold_index starting at 0.
+    Any leftover rows at the series end that don't fill one more whole
+    test_block are simply not used by any fold (never leaked into training
+    partway through, which padding a short final block would risk).
+    """
+    n = len(table)
+    max_folds = (n - min_train) // test_block
+    if max_folds < 1:
+        raise ValueError(
+            f"Not enough rows for even one fold: n={n}, min_train={min_train}, "
+            f"test_block={test_block}"
+        )
+    k = max_folds if n_folds is None else min(n_folds, max_folds)
+
+    folds = []
+    for i in range(k):
+        train_end = min_train + i * test_block
+        test_end = train_end + test_block
+        folds.append((i, table.iloc[:train_end], table.iloc[train_end:test_end]))
+    return folds
+
+
 def evaluate(y_true, y_pred) -> dict:
     """
     MAE  - mean absolute error, in CASES. Average size of a miss.

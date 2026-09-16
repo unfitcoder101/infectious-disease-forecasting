@@ -15,12 +15,14 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")           # no GUI needed; write straight to file
 import matplotlib.pyplot as plt
+import numpy as np
 
 FIG_DIR = Path(__file__).resolve().parents[1] / "results" / "figures"
 
 SERIES_COLORS = {"XGBoost": "#2a78d6", "LightGBM": "#eb6834"}
 BASELINE_COLOR = "#8a8984"
 TEXT_PRIMARY, TEXT_SECONDARY, GRID = "#0b0b0b", "#52514e", "#dcdbd6"
+RANDOM_SEED_FOR_JITTER = 42     # only affects horizontal scatter jitter, not any metric
 
 METRICS = [
     ("MAE",            "MAE (cases)",              "Mean absolute error vs history window", False),
@@ -31,8 +33,8 @@ METRICS = [
 ]
 
 
-def _style(ax, title, ylabel, windows):
-    ax.set_title(title, fontsize=13, color=TEXT_PRIMARY, pad=12, loc="left", fontweight="bold")
+def _style(ax, title, ylabel, windows, title_fontsize=13):
+    ax.set_title(title, fontsize=title_fontsize, color=TEXT_PRIMARY, pad=12, loc="left", fontweight="bold")
     ax.set_xlabel("History window (weeks of past data given to the model)",
                   fontsize=10, color=TEXT_SECONDARY)
     ax.set_ylabel(ylabel, fontsize=10, color=TEXT_SECONDARY)
@@ -152,6 +154,83 @@ def plot_robustness(results, outfile):
     fig.suptitle("Robustness: the same comparison on two disjoint future periods",
                  fontsize=13, color=TEXT_PRIMARY, fontweight="bold", x=0.01, ha="left")
     fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.savefig(outfile, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def plot_cv_summary(cv_summary, outfile, tolerance_pct=5):
+    """
+    MAE vs history window, but now each point is a MEAN across CV folds with
+    an ERROR BAR of +/-1 standard deviation, instead of a single number.
+
+    This is the figure that actually answers "did CV change the story":
+    on the single-split chart, the lines are clean and the 8-12 week jump
+    looks dramatic. Here, if the error bars of adjacent windows overlap,
+    that jump is not distinguishable from fold-to-fold noise.
+    """
+    windows = sorted(cv_summary["history_window"].unique())
+    x = list(range(len(windows)))
+
+    fig, ax = plt.subplots(figsize=(9.5, 5.2), dpi=150)
+    fig.patch.set_facecolor("#fcfcfb")
+    ax.set_facecolor("#fcfcfb")
+
+    for name, color in SERIES_COLORS.items():
+        sub = cv_summary[cv_summary["model"] == name].sort_values("history_window")
+        ax.errorbar(x, sub["MAE_mean"], yerr=sub["MAE_std"], color=color, linewidth=2,
+                    marker="o", markersize=8, markeredgecolor="#fcfcfb", markeredgewidth=1.5,
+                    capsize=4, elinewidth=1.4, ecolor=color, alpha=0.95,
+                    label=name, zorder=3)
+
+    base = cv_summary[cv_summary["model"].str.startswith("Persistence")]
+    if len(base):
+        base_mean = base["MAE_mean"].mean()
+        ax.axhline(base_mean, color=BASELINE_COLOR, linewidth=1.6, linestyle="--", zorder=2,
+                   label=f"Persistence baseline (mean {base_mean:.2f})")
+
+    n_folds = int(cv_summary["n_folds"].iloc[0]) if len(cv_summary) else "?"
+    _style(ax, f"CV mean MAE vs history window ({n_folds} rolling-origin folds, error bars = ±1 std)",
+           "MAE (cases)", windows, title_fontsize=12)
+    leg = ax.legend(frameon=False, fontsize=9, loc="best")
+    for t in leg.get_texts():
+        t.set_color(TEXT_SECONDARY)
+    fig.tight_layout()
+    fig.savefig(outfile, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def plot_cv_fold_detail(cv_results, outfile):
+    """
+    Every individual fold's MAE as a faint point, model mean as a bold line.
+    Shows the RAW spread the error-bar chart only summarizes -- useful for
+    spotting whether variance comes from a couple of outlier folds (e.g. a
+    fold that happens to contain an outbreak peak) or is spread evenly.
+    """
+    model_rows = cv_results[~cv_results["model"].str.startswith("Persistence")]
+    windows = sorted(model_rows["history_window"].unique())
+    x_pos = {w: i for i, w in enumerate(windows)}
+
+    fig, ax = plt.subplots(figsize=(8, 4.8), dpi=150)
+    fig.patch.set_facecolor("#fcfcfb")
+    ax.set_facecolor("#fcfcfb")
+
+    rng = np.random.default_rng(RANDOM_SEED_FOR_JITTER)
+    for name, color in SERIES_COLORS.items():
+        sub = model_rows[model_rows["model"] == name]
+        jitter = rng.uniform(-0.12, 0.12, size=len(sub))
+        xs = [x_pos[w] for w in sub["history_window"]] + jitter
+        ax.scatter(xs, sub["MAE"], color=color, alpha=0.35, s=28, zorder=2, linewidths=0)
+
+        means = sub.groupby("history_window")["MAE"].mean().reindex(windows)
+        ax.plot(range(len(windows)), means, color=color, linewidth=2.4, marker="o",
+                markersize=7, markeredgecolor="#fcfcfb", markeredgewidth=1.3,
+                label=f"{name} (fold mean)", zorder=3)
+
+    _style(ax, "Every CV fold's MAE (faint dots) with fold-mean overlaid", "MAE (cases)", windows)
+    leg = ax.legend(frameon=False, fontsize=9, loc="best")
+    for t in leg.get_texts():
+        t.set_color(TEXT_SECONDARY)
+    fig.tight_layout()
     fig.savefig(outfile, facecolor=fig.get_facecolor())
     plt.close(fig)
 

@@ -1,0 +1,11 @@
+model,history_window,folds_won,n_folds,win_rate_pct
+XGBoost,1,0,10,0.0
+XGBoost,2,3,10,30.0
+XGBoost,4,3,10,30.0
+XGBoost,8,2,10,20.0
+XGBoost,12,2,10,20.0
+LightGBM,1,2,10,20.0
+LightGBM,2,2,10,20.0
+LightGBM,4,2,10,20.0
+LightGBM,8,3,10,30.0
+LightGBM,12,1,10,10.0

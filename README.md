@@ -9,13 +9,16 @@ using XGBoost and LightGBM on real weekly dengue surveillance data.
 ## Headline result
 
 For San Juan dengue (1990–2008), **longer history did not improve next-week
-forecasts**. Short windows (1–4 weeks) matched or beat long windows (8–12) on the
-test period while training ~3× faster. But the exact "minimum sufficient" window
-**could not be identified**: the same decision rule gives different answers on two
-different future periods. Only 1 of 10 configurations beat a persistence baseline.
+forecasts**. Short windows (1–4 weeks) matched or beat long windows (8–12), both
+on a single chronological test split and on **10-fold rolling-origin
+cross-validation**, while training ~3× faster. The exact single best window
+within {1, 2, 4} **could not be pinned down**: CV shows those three windows sit
+within one fold-level standard deviation of each other, and no window wins a
+majority of folds. Only 1 of 10 configurations beat a persistence baseline.
 
 See [`research_notes.md`](research_notes.md) for the full write-up, including
-limitations. Results are reported for **this dataset and configuration only**.
+the CV methodology and limitations. Results are reported for **this dataset and
+configuration only**.
 
 ## Setup
 
@@ -39,13 +42,23 @@ repeats, and should be read as orders of magnitude, not exact constants.
 
 ## Output
 
+**Single-split experiment:**
 - `results/results_table.csv` — window × model × {MAE, RMSE, R², train/inference time, sample counts}
 - `results/sensitivity_analysis.csv` — change at each 1→2→4→8→12 step
 - `results/minimum_sufficient_window.csv` — the pre-registered 5%-tolerance rule
 - `results/robustness_check.csv` — does the rule agree across two periods? (it does not)
 - `results/baseline_comparison.csv` — improvement over persistence
-- `results/figures/*.png` — MAE, RMSE, R², training time, inference time vs window;
-  plus a two-period robustness panel and an actual-vs-predicted forecast plot
+
+**Rolling-origin cross-validation (10 folds, 26-week blocks):**
+- `results/cv_results.csv` — one row per (fold × window × model)
+- `results/cv_summary.csv` — mean ± std across folds, per window × model
+- `results/cv_fold_win_counts.csv` — how often each window had the lowest MAE
+- `results/cv_minimum_sufficient_window.csv` — the same 5%-tolerance rule applied to CV means
+
+**Figures** (`results/figures/*.png`): MAE, RMSE, R², training time, inference
+time vs window (single split); a two-period robustness panel; CV mean MAE with
+±1 std error bars; every fold's MAE plotted individually; an actual-vs-predicted
+forecast overlay.
 
 ## Layout
 
@@ -56,9 +69,9 @@ src/data_loader.py     load + merge the raw files
 src/preprocessing.py   audit and clean (audits rather than silently imputing)
 src/features.py        lag features + window alignment
 src/models.py          XGBoost / LightGBM, identical fixed settings
-src/evaluation.py      chronological split, MAE/RMSE/R², persistence baseline
-src/experiment.py      the window × model grid, sensitivity, robustness
-src/visualization.py   figures
+src/evaluation.py      chronological split, rolling-origin CV splits, MAE/RMSE/R², persistence baseline
+src/experiment.py      window × model grid, sensitivity, robustness, CV runner + summary
+src/visualization.py   figures, including CV error-bar and fold-detail plots
 run_experiment.py      runs the whole pipeline
 ```
 
@@ -72,6 +85,10 @@ run_experiment.py      runs the whole pipeline
 - **Model settings fixed across windows** — the study is about context length, not
   about tuning.
 - **Decision rule pre-registered in code** before results were inspected.
+- **Rolling-origin CV** (expanding training window, non-overlapping test blocks)
+  answers "does the window ranking hold up across time", which a single split
+  cannot. Fold size (26 weeks, 10 folds) was derived from the actual aligned row
+  count, not guessed — see `research_notes.md` §5.1.
 
 ## Data
 
