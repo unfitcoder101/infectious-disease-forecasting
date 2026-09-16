@@ -1,0 +1,80 @@
+# How Much Surveillance History Is Enough?
+
+A temporal context sensitivity study for short-term infectious disease forecasting.
+
+**Question:** how many weeks of past dengue case counts are actually needed to
+forecast next week's count? Compares history windows of **1, 2, 4, 8, 12 weeks**
+using XGBoost and LightGBM on real weekly dengue surveillance data.
+
+## Headline result
+
+For San Juan dengue (1990–2008), **longer history did not improve next-week
+forecasts**. Short windows (1–4 weeks) matched or beat long windows (8–12) on the
+test period while training ~3× faster. But the exact "minimum sufficient" window
+**could not be identified**: the same decision rule gives different answers on two
+different future periods. Only 1 of 10 configurations beat a persistence baseline.
+
+See [`research_notes.md`](research_notes.md) for the full write-up, including
+limitations. Results are reported for **this dataset and configuration only**.
+
+## Setup
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Run
+
+```bash
+python run_experiment.py              # San Juan (default)
+python run_experiment.py --city iq    # Iquitos, Peru
+```
+
+Everything is seeded (seed 42). Reruns reproduce **all accuracy metrics bitwise
+identically** (verified). The `training_time` / `inference_time` columns vary by
+~1 ms between runs, as any wall-clock measurement does — they are medians of 5
+repeats, and should be read as orders of magnitude, not exact constants.
+
+## Output
+
+- `results/results_table.csv` — window × model × {MAE, RMSE, R², train/inference time, sample counts}
+- `results/sensitivity_analysis.csv` — change at each 1→2→4→8→12 step
+- `results/minimum_sufficient_window.csv` — the pre-registered 5%-tolerance rule
+- `results/robustness_check.csv` — does the rule agree across two periods? (it does not)
+- `results/baseline_comparison.csv` — improvement over persistence
+- `results/figures/*.png` — MAE, RMSE, R², training time, inference time vs window;
+  plus a two-period robustness panel and an actual-vs-predicted forecast plot
+
+## Layout
+
+```
+data/raw/          real surveillance CSVs + SOURCE.md (provenance & checksums)
+data/processed/    cleaned weekly series
+src/data_loader.py     load + merge the raw files
+src/preprocessing.py   audit and clean (audits rather than silently imputing)
+src/features.py        lag features + window alignment
+src/models.py          XGBoost / LightGBM, identical fixed settings
+src/evaluation.py      chronological split, MAE/RMSE/R², persistence baseline
+src/experiment.py      the window × model grid, sensitivity, robustness
+src/visualization.py   figures
+run_experiment.py      runs the whole pipeline
+```
+
+## Method notes
+
+- **No random splitting.** Chronological only — a random split would train the
+  model on weeks after those it is tested on, and consecutive weeks are so similar
+  that near-duplicate rows would land on both sides of the split.
+- **All windows aligned to identical weeks** (924), so history length is the only
+  variable that differs between conditions.
+- **Model settings fixed across windows** — the study is about context length, not
+  about tuning.
+- **Decision rule pre-registered in code** before results were inspected.
+
+## Data
+
+NOAA/CDC Dengue Forecasting Project (2015) via the DrivenData "DengAI" dataset.
+Real data, not synthetic. The original NOAA host is offline; files were taken from
+two independent mirrors and verified byte-identical. See `data/raw/SOURCE.md`.

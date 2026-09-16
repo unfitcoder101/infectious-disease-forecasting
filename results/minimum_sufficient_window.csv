@@ -1,0 +1,3 @@
+model,best_window,best_MAE,tolerance,mae_threshold,minimum_sufficient_window,near_optimal_windows
+XGBoost,4,7.558166594814054,0.05,7.936074924554757,2,"2, 4"
+LightGBM,1,7.093169307247148,0.05,7.447827772609506,1,1
