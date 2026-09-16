@@ -1,0 +1,9 @@
+# Cosmetic only. Primary color matches the XGBoost blue already used in every
+# figure in results/figures/ (src/visualization.py SERIES_COLORS), so the
+# dashboard chrome and the embedded static figures read as one system.
+[theme]
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#0b0b0b"
+font = "sans serif"

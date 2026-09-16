@@ -1,0 +1,8 @@
+# Extra dependencies for the read-only Streamlit dashboard (streamlit_app.py).
+# Kept SEPARATE from requirements.txt so the core ML reproducibility file
+# (pinned versions actually used to produce results/) stays untouched.
+#
+# Install alongside the core requirements:
+#   pip install -r requirements.txt -r requirements-dashboard.txt
+streamlit==1.64.0
+pandas==3.0.5
