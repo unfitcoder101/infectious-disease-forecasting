@@ -1,4 +1,4 @@
-# How Much Surveillance History Is Enough?
+# How Much Surveillance History Is Enough?                     
 
 A temporal context sensitivity study for short-term infectious disease forecasting.
 
@@ -6,13 +6,13 @@ A temporal context sensitivity study for short-term infectious disease forecasti
 forecast next week's count? Compares history windows of **1, 2, 4, 8, 12 weeks**
 using XGBoost and LightGBM on real weekly dengue surveillance data.
 
-## Headline result
+## Headline result                    
 
 For San Juan dengue (1990–2008), **longer history did not improve next-week
 forecasts**. Short windows (1–4 weeks) matched or beat long windows (8–12), both
 on a single chronological test split and on **10-fold rolling-origin
 cross-validation**, while training ~3× faster. Only 1 of 10 configurations beat
-a persistence baseline.
+a persistence baseline.             
 
 ## Final Research Finding
 
@@ -25,7 +25,7 @@ agree on which window had the lowest observed error (LightGBM: window 4;
 XGBoost: window 2). **No window is claimed to be optimal.** The honest,
 final conclusion is that this study identifies a short-history regime rather
 than an exact minimum sufficient window.
-
+                 
 See [`research_notes.md`](research_notes.md) §§5–9 for the full CV methodology,
 the targeted follow-up, and all limitations. Results are reported for **this
 dataset and configuration only**.
