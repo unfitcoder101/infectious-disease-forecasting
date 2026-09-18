@@ -1,11 +1,11 @@
-# How Much Surveillance History Is Enough?
+# How Much Surveillance History Is Enough?                              
 ### A Temporal Context Sensitivity Study for Short-Term Infectious Disease Forecasting
-
+                         
 **Run date:** 2026-09-16, updated 2026-09-17 with rolling-origin CV and a targeted 21-fold/13-week follow-up · **Seed:** 42 · **Status:** working research prototype
-
+                   
 ---
 
-## 1. Research question
+## 1. Research question                   
 
 How many weeks of past dengue surveillance data are actually needed to forecast
 next week's case count? We compare history windows of **1, 2, 4, 8, and 12 weeks**.
