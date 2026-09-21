@@ -4,15 +4,15 @@
 **Run date:** 2026-09-16, updated 2026-09-17 with rolling-origin CV and a targeted 21-fold/13-week follow-up · **Seed:** 42 · **Status:** working research prototype
                    
 ---
-
+                   
 ## 1. Research question                   
-
+                          
 How many weeks of past dengue surveillance data are actually needed to forecast
 next week's case count? We compare history windows of **1, 2, 4, 8, and 12 weeks**.
-
+                  
 The question is *not* "what is the best possible dengue model". Model settings are
 held fixed on purpose so that history length is the only variable that changes.
-
+                   
 ---
 
 ## 2. Data
@@ -20,17 +20,17 @@ held fixed on purpose so that history length is the only variable that changes.
 **Source:** NOAA / CDC **Dengue Forecasting Project** (2015) training data, as
 distributed in the DrivenData "DengAI" challenge. Real surveillance data, not
 synthetic.
-
+                           
 **Series used:** San Juan, Puerto Rico — **936 weekly observations**,
 1990-04-30 → 2008-04-22 (18.0 years). Cases: min 0, median 19, max 461.
-
+                            
 **Provenance caveat (important):** the original host
 `dengueforecasting.noaa.gov` **no longer resolves** — the project site has been
 decommissioned. Data was obtained from public GitHub mirrors, and to guard
 against an altered copy, the files were downloaded from **two unrelated
 repositories and verified byte-identical** (md5 `5df4b6d0240bb83d4b509cc045b46603`).
 Full details in `data/raw/SOURCE.md`.
-
+                            
 ### Data quality audit (measured, not assumed)
 | Check | Result |
 |---|---|
@@ -40,15 +40,15 @@ Full details in `data/raw/SOURCE.md`.
 | Negative values | 0 |
 | Gaps between consecutive weeks | 917 × 7 days, 14 × 8 days, 4 × 9 days |
 | **True missing weeks (gap ≥ 14 days)** | **0** |
-
+                       
 The 18 irregular gaps are **not** missing data. They are the epidemiological-week
 convention: the last week of each year is stretched to 8–9 days so the next year
 begins on January 1. **No imputation was performed**, because none was needed.
-
+                       
 We also found the dataset's `year`/`weekofyear` columns contain a known
 inconsistency (a stray "week 53" disagreeing with the year field), so
 `week_start_date` was used as the authoritative time index instead.
-
+                              
 **No climate covariates were used.** The only predictor is the disease's own past.
 
 ---
