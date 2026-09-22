@@ -45,9 +45,9 @@ def load_raw(city: str = "sj") -> pd.DataFrame:
     # validate="one_to_one" makes pandas raise if the join keys are not unique
     # on both sides. That is a cheap guard against silently duplicating rows.
     merged = labels.merge(features, on=keys, how="left", validate="one_to_one")
-
+                    
     city_df = merged.loc[merged["city"] == city].copy()
-
+                                        
     out = pd.DataFrame({
         "date": pd.to_datetime(city_df["week_start_date"]),
         "cases": city_df["total_cases"],
