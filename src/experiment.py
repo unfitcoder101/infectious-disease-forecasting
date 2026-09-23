@@ -64,7 +64,6 @@ CV_FOLD_TARGET = (8, 10)
 FINE_CV_TEST_BLOCK = 13
 FINE_CV_WINDOWS = [1, 2, 4]
 
-
 def _median_timed(fn, repeats=N_TIMING_REPEATS):
     """Run fn repeatedly, return (result_of_last_run, median seconds)."""
     times, result = [], None
@@ -73,7 +72,6 @@ def _median_timed(fn, repeats=N_TIMING_REPEATS):
         result = fn()
         times.append(time.perf_counter() - t0)
     return result, float(np.median(times))
-
 
 def run_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS) -> pd.DataFrame:
     """Train every model on every window; return the tidy results table."""
@@ -114,7 +112,6 @@ def run_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS) -> pd.DataFram
             ))
 
     return pd.DataFrame(rows)
-
 
 def run_cv_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS,
                        train_frac=CV_TRAIN_FRAC, test_block=CV_TEST_BLOCK,
@@ -181,7 +178,6 @@ def run_cv_experiment(series: pd.DataFrame, windows=HISTORY_WINDOWS,
 
     return pd.DataFrame(rows)
 
-
 def cv_summary(cv_results: pd.DataFrame) -> pd.DataFrame:
     """
     Aggregate per-fold CV scores into mean +/- std per (history_window, model).
@@ -200,7 +196,6 @@ def cv_summary(cv_results: pd.DataFrame) -> pd.DataFrame:
         inference_time_mean=("inference_time", "mean"),
     ).reset_index()
     return agg.sort_values(["model", "history_window"]).reset_index(drop=True)
-
 
 def fold_win_counts(cv_results: pd.DataFrame) -> pd.DataFrame:
     """
@@ -227,7 +222,6 @@ def fold_win_counts(cv_results: pd.DataFrame) -> pd.DataFrame:
                              folds_won=int(wins), n_folds=n_folds,
                              win_rate_pct=100 * wins / n_folds))
     return pd.DataFrame(out)
-
 
 def cv_minimum_sufficient_window(summary: pd.DataFrame, tolerance=TOLERANCE) -> pd.DataFrame:
     """
@@ -256,7 +250,6 @@ def cv_minimum_sufficient_window(summary: pd.DataFrame, tolerance=TOLERANCE) -> 
             min_sufficient_within_1std_of_best=within_1std,
         ))
     return pd.DataFrame(out)
-
 
 def paired_fold_differences(cv_results: pd.DataFrame, pairs=((1, 2), (1, 4), (2, 4))) -> pd.DataFrame:
     """
@@ -302,7 +295,6 @@ def paired_fold_differences(cv_results: pd.DataFrame, pairs=((1, 2), (1, 4), (2,
                 ))
     return pd.DataFrame(out)
 
-
 def paired_diff_summary(paired: pd.DataFrame) -> pd.DataFrame:
     """
     Summarize paired differences per (model, window_a, window_b): mean/std
@@ -329,7 +321,6 @@ def paired_diff_summary(paired: pd.DataFrame) -> pd.DataFrame:
         ))
     return pd.DataFrame(out)
 
-
 def sensitivity_analysis(results: pd.DataFrame) -> pd.DataFrame:
     """
     Step-by-step change from each window to the next longer one.
@@ -351,7 +342,6 @@ def sensitivity_analysis(results: pd.DataFrame) -> pd.DataFrame:
                 train_time_ratio=cur.training_time / prev.training_time,
             ))
     return pd.DataFrame(out)
-
 
 def robustness_check(results: pd.DataFrame, tolerance=TOLERANCE) -> pd.DataFrame:
     """
@@ -394,7 +384,6 @@ def robustness_check(results: pd.DataFrame, tolerance=TOLERANCE) -> pd.DataFrame
         ))
     return pd.DataFrame(out)
 
-
 def baseline_comparison(results: pd.DataFrame) -> pd.DataFrame:
     """
     How much does each model/window actually beat the persistence baseline?
@@ -411,7 +400,6 @@ def baseline_comparison(results: pd.DataFrame) -> pd.DataFrame:
             val_improvement_pct=100 * (base.val_MAE - r.val_MAE) / base.val_MAE,
         ))
     return pd.DataFrame(rows)
-
 
 def minimum_sufficient_window(results: pd.DataFrame, tolerance=TOLERANCE) -> pd.DataFrame:
     """Apply the pre-registered rule declared at the top of this module."""
