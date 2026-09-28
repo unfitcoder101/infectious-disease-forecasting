@@ -92,22 +92,23 @@ run_experiment.py      runs the whole pipeline
 ```
 
 ## Method notes
-
+                              
 - **No random splitting.** Chronological only — a random split would train the
   model on weeks after those it is tested on, and consecutive weeks are so similar
-  that near-duplicate rows would land on both sides of the split.
+  that near-duplicate rows would land on both sides of the split.                        
 - **All windows aligned to identical weeks** (924), so history length is the only
-  variable that differs between conditions.
+  variable that differs between conditions.                        
 - **Model settings fixed across windows** — the study is about context length, not
-  about tuning.
+  about tuning.                             
 - **Decision rule pre-registered in code** before results were inspected.
 - **Rolling-origin CV** (expanding training window, non-overlapping test blocks)
   answers "does the window ranking hold up across time", which a single split
   cannot. Fold size (26 weeks, 10 folds) was derived from the actual aligned row
-  count, not guessed — see `research_notes.md` §5.1.
+  count, not guessed — see `research_notes.md` §5.1.                               
 
-## Data
-
+## Data                       
+                                          
 NOAA/CDC Dengue Forecasting Project (2015) via the DrivenData "DengAI" dataset.
 Real data, not synthetic. The original NOAA host is offline; files were taken from
 two independent mirrors and verified byte-identical. See `data/raw/SOURCE.md`.
+                                
