@@ -7,7 +7,7 @@ a result that is really an artifact of your own cleaning code.
 """
 
 import pandas as pd
-
+import numpy 
 
 def audit_series(df: pd.DataFrame) -> dict:
     """
