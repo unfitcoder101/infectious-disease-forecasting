@@ -1,7 +1,7 @@
 """
 The two gradient-boosting models compared in this study.
-
-WHAT GRADIENT BOOSTING IS, BRIEFLY
+                              
+WHAT GRADIENT BOOSTING IS, BRIEFLY                             
 ----------------------------------
 Both XGBoost and LightGBM build an ENSEMBLE of small decision trees, added
 one at a time. Each new tree is fitted to the errors left over by the trees
@@ -9,8 +9,8 @@ built so far, so the ensemble gradually corrects itself. They differ mainly
 in how they grow each tree: XGBoost grows level-by-level, LightGBM grows
 leaf-by-leaf (splitting whichever leaf reduces error most), which usually
 makes LightGBM faster but slightly more prone to overfitting on small data.
-
-WHY IDENTICAL SETTINGS ACROSS WINDOWS
+                          
+WHY IDENTICAL SETTINGS ACROSS WINDOWS                       
 -------------------------------------
 The research question is "does more history help?", NOT "what is the best
 possible model?". If each window got its own tuned hyperparameters, a
