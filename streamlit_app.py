@@ -12,6 +12,7 @@ Run locally:
 
 from pathlib import Path
 
+import altair as alt  # transitive dependency of streamlit
 import pandas as pd
 import streamlit as st
 
@@ -23,6 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = BASE_DIR / "results"
 FIG_DIR = RESULTS_DIR / "figures"
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
+
+# Singapore external validation: its own directory, never mixed with results/.
+SG_DIR = BASE_DIR / "singapore_analysis"
+SG_RESULTS_DIR = SG_DIR / "results"
+SG_FIG_DIR = SG_DIR / "figures"
+SG_TABLES_DIR = SG_DIR / "tables"
 
 # Same categorical hues already validated and used in every existing figure
 # in results/figures/ (src/visualization.py SERIES_COLORS) -- reused here,
@@ -47,6 +54,26 @@ def load_csv(name: str) -> pd.DataFrame:
 def load_processed(city: str) -> pd.DataFrame:
     df = pd.read_csv(PROCESSED_DIR / f"{city}_weekly_cases.csv", parse_dates=["date"])
     return df.set_index("date")
+
+
+@st.cache_data
+def load_sg_csv(name: str) -> pd.DataFrame:
+    """Singapore result table from singapore_analysis/results/ (read-only)."""
+    return pd.read_csv(SG_RESULTS_DIR / name)
+
+
+@st.cache_data
+def load_sg_table(name: str) -> pd.DataFrame:
+    """Singapore audit/EDA/protocol table from singapore_analysis/tables/ (read-only)."""
+    return pd.read_csv(SG_TABLES_DIR / name)
+
+
+def sg_fig(name: str):
+    """Path to an existing figure in singapore_analysis/figures/."""
+    p = SG_FIG_DIR / name
+    if not p.exists():
+        st.error(f"Expected figure not found: {p}")
+    return p
 
 
 def fig(name: str):
@@ -156,13 +183,14 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion = st.tabs(
+tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg = st.tabs(
     [
         "📋 Overview",
         "📊 Single-Split (1/2/4/8/12 wk)",
         "🔁 Rolling-Origin CV (10-fold)",
         "🎯 Targeted Follow-up (21-fold)",
         "✅ Conclusion & Limitations",
+        "🌏 Singapore External Validation",
     ]
 )
 
@@ -488,3 +516,271 @@ in general.
             """
         )
     st.caption("Verbatim from the committed research_notes.md §8 — see the repository for the full document.")
+
+# ===========================================================================
+# TAB 6 — SINGAPORE EXTERNAL VALIDATION
+# Reads ONLY from singapore_analysis/{results,figures,tables}. Nothing above
+# this line is affected by anything in this block.
+# ===========================================================================
+with tab_sg:
+    st.markdown(
+        """
+        <div class="research-banner">
+        <b>External validation, not replication.</b> Singapore MOH dengue fever
+        (DHF excluded), 2012-2022, different case definition from DengAI.
+        Evaluation period 2019-W41 to 2022-W52 includes the 2020 and 2022 epidemics.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "📍 **Scope: Singapore only.** Same windows, models, fixed hyperparameters, "
+        "persistence baseline and 5% rule as the other tabs. 13 rolling-origin folds "
+        "of 13 weeks (the design that carries the statistical comparisons) and 6 folds "
+        "of 26 weeks (descriptive only). Errors are in cases and Singapore's counts are "
+        "about 11× San Juan's, so **no number on this tab is comparable with the other tabs.**",
+        icon="📍",
+    )
+
+    PERSIST = "Persistence (baseline)"
+    sg13 = load_sg_csv("sg_cv13_extended_summary.csv")
+    sg13_models = sg13[sg13["model"] != PERSIST]
+    sg13_persist_mae = sg13.loc[sg13["model"] == PERSIST, "MAE_mean"].iloc[0]
+    sg13_cmp = load_sg_csv("sg_cv13_comparisons_mae.csv")
+    sg13_folds = load_sg_csv("sg_cv13_results.csv")
+    sg_primary = sg13_cmp[sg13_cmp["family"].str.startswith("primary")]
+    sg_vs_persist = sg13_cmp[sg13_cmp["family"].str.contains("persistence")]
+    sg_pairs = sg13_cmp[sg13_cmp["family"].str.contains("window pairs")]
+
+    sg_best = sg13_models.loc[sg13_models["MAE_mean"].idxmin()]
+    sg_n_beat = int((sg13_models["MAE_mean"] < sg13_persist_mae).sum())
+    sg_p_lo, sg_p_hi = sg_primary["wilcoxon_p_holm"].min(), sg_primary["wilcoxon_p_holm"].max()
+    sg_p_text = f"{sg_p_hi:.2f}" if round(sg_p_lo, 2) == round(sg_p_hi, 2) else f"{sg_p_lo:.2f}–{sg_p_hi:.2f}"
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Lowest observed CV mean MAE", f"{sg_best['MAE_mean']:.2f} cases",
+              help="Lowest mean across 13 folds. NOT a claim this window is proven best.")
+    k2.metric("↳ from window / model", f"{int(sg_best['history_window'])} wk · {sg_best['model']}")
+    k3.metric("Persistence baseline MAE", f"{sg13_persist_mae:.2f} cases")
+    k4.metric("Configs beating persistence", f"{sg_n_beat} / {len(sg13_models)}")
+    k5.metric("Short vs long, Holm-adjusted p", sg_p_text,
+              help="Windows {1, 2, 4} against {8, 12}, paired by fold, Wilcoxon signed-rank, "
+                   "Holm-adjusted across the two models. Not significant.")
+    st.caption(
+        "⚠️ \"Lowest observed\" describes these 13 folds. It is not evidence the "
+        "window is *meaningfully* better — see the table further down, which keeps "
+        "the two apart."
+    )
+
+    st.markdown(
+        f"""
+        <div class="finding-box">
+
+**Short history was directionally similar to San Juan but NOT statistically
+separable from long history (p = {sg_p_text}).** Under the pre-registered protocol,
+the 5% rule selected 1 week for both models in both CV designs, and
+windows 8 and 12 were never near-optimal. The paired test, however, does not
+distinguish short windows from long ones.
+
+**Persistence beat every model.** All {len(sg13_models)} model/window configurations
+had higher mean MAE than "next week = this week".
+
+**No window is claimed optimal**, for Singapore or in general.
+
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("")
+    st.subheader("The series")
+    st.image(str(sg_fig("01_weekly_time_series.png")), width="stretch")
+    st.caption(
+        "574 weekly observations, 2012-W01 to 2022-W52. The dashed line marks the start "
+        "of the evaluation period. The 2020 and 2022 peaks are about twice the highest "
+        "value in the training years, which tree models cannot predict above."
+    )
+    e1, e2 = st.columns(2)
+    with e1:
+        st.image(str(sg_fig("02_annual_totals_and_weekly_averages.png")), width="stretch")
+        st.caption("Annual totals range from 2,759 (2017) to 35,261 (2020). "
+                   "2020 and 2022 together hold 41% of all cases.")
+    with e2:
+        st.image(str(sg_fig("05_autocorrelation.png")), width="stretch")
+        st.caption("Lag-1 autocorrelation is 0.976; partial autocorrelation is small beyond "
+                   "lag 4–5. Orange bars mark the study's window lengths.")
+
+    st.subheader("MAE by history window — XGBoost vs LightGBM (13-fold CV mean)")
+    # Grouped (side-by-side) bars, one per model per window. Singapore tab only:
+    # the shared model_bar helper (used by the San Juan tabs) is left unchanged.
+    sg_bar = sg13_models[sg13_models["model"].isin(SERIES_COLORS)][["history_window", "model", "MAE_mean"]].copy()
+    sg_bar["history_window"] = sg_bar["history_window"].astype(int)
+    sg_bar = sg_bar.sort_values(["history_window", "model"])
+    # Explicit Altair spec (not st.bar_chart): the built-in chart sorts string x labels
+    # alphabetically (1, 12, 2, 4, 8) and binds the axes to scroll-zoom, which clips every
+    # bar at the same height once the y axis is zoomed. Here the window order is numeric,
+    # y starts at zero and the chart is not zoomable.
+    sg_windows = sorted(sg_bar["history_window"].unique().tolist())
+    st.altair_chart(
+        alt.Chart(sg_bar).mark_bar().encode(
+            x=alt.X("history_window:O", sort=sg_windows, title="History window (weeks)",
+                    axis=alt.Axis(labelAngle=0)),
+            xOffset=alt.XOffset("model:N", sort=list(SERIES_COLORS)),
+            y=alt.Y("MAE_mean:Q", title="Mean MAE (cases)", scale=alt.Scale(domainMin=0)),
+            color=alt.Color("model:N", title=None, sort=list(SERIES_COLORS),
+                            scale=alt.Scale(domain=list(SERIES_COLORS),
+                                            range=list(SERIES_COLORS.values()))),
+            tooltip=[alt.Tooltip("history_window:O", title="Window (weeks)"),
+                     alt.Tooltip("model:N", title="Model"),
+                     alt.Tooltip("MAE_mean:Q", title="Mean MAE", format=".2f")],
+        ).properties(height=320),
+        width="stretch",
+    )
+    st.caption(f"Persistence baseline for comparison: {sg13_persist_mae:.2f} cases — below every bar.")
+    st.image(str(sg_fig("results_cv13_mae_vs_history_window.png")), width="stretch")
+    st.caption(
+        "Error bars overlapping across windows means the difference between them "
+        "is not distinguishable from fold-to-fold noise."
+    )
+
+    st.subheader("Lowest observed ≠ meaningfully better")
+    sg_rows = []
+    for sg_model in SERIES_COLORS:
+        sub = sg13_models[sg13_models["model"] == sg_model]
+        b = sub.loc[sub["MAE_mean"].idxmin()]
+        label = f"window {int(b['history_window'])}"
+        own = sg_pairs[(sg_pairs["model"] == sg_model) & ((sg_pairs["a"] == label) | (sg_pairs["b"] == label))]
+        sg_rows.append(
+            f"| {sg_model} | {label} ({b['MAE_mean']:.2f}) | **No** — none of its {len(own)} paired "
+            f"comparisons against other windows is significant after Holm adjustment "
+            f"(smallest adjusted p = {own['wilcoxon_p_holm'].min():.2f}) |"
+        )
+    st.markdown(
+        "| | Lowest **observed** mean MAE | Meaningfully better? |\n|---|---|---|\n" + "\n".join(sg_rows)
+    )
+    st.caption(
+        "Both models have their lowest observed mean at 1 week, and the 5% rule selects "
+        "1 week. Neither fact establishes that 1 week is better than the alternatives: "
+        "medians rank the windows less cleanly (see the table below)."
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Mean, median and std of fold MAE (13 folds)**")
+        st.dataframe(
+            sg13[["history_window", "model", "MAE_mean", "MAE_median", "MAE_std", "n_folds"]]
+            .sort_values(["model", "history_window"]),
+            width="stretch", hide_index=True,
+        )
+    with col2:
+        st.markdown("**Fold win counts** (lowest MAE that fold)")
+        st.dataframe(
+            load_sg_csv("sg_cv13_fold_win_counts.csv").sort_values(["model", "history_window"]),
+            width="stretch", hide_index=True,
+        )
+
+    st.subheader("Short {1, 2, 4} vs long {8, 12} — the pre-specified primary comparison")
+    st.dataframe(
+        sg_primary[["model", "mean_diff", "median_diff", "bootstrap_ci95_low", "bootstrap_ci95_high",
+                    "folds_a_better", "folds_b_better", "wilcoxon_p", "wilcoxon_p_holm"]],
+        width="stretch", hide_index=True,
+    )
+    st.caption(
+        "Per-fold mean MAE of the short windows minus the long windows. Negative means "
+        "short had lower error. The direction favours short for both models; "
+        "both intervals include zero, and neither test is significant."
+    )
+
+    st.subheader("Persistence beat every model")
+    sg_sig_worse = int(((sg_vs_persist["wilcoxon_p_holm"] < 0.05) & (sg_vs_persist["mean_diff"] > 0)).sum())
+    st.markdown(
+        f"Persistence had lower mean MAE than all {len(sg_vs_persist)} configurations, and "
+        f"**{sg_sig_worse} of {len(sg_vs_persist)}** were worse than it, nominally significant after Holm adjustment "
+        "(folds are not independent, so indicative only). This comparison was declared exploratory before the run."
+    )
+    st.dataframe(
+        sg_vs_persist[["model", "a", "mean_diff", "mean_diff_pct_of_b", "median_diff",
+                       "folds_a_better", "folds_b_better", "wilcoxon_p_holm"]]
+        .rename(columns={"a": "window", "folds_a_better": "folds_model_better",
+                         "folds_b_better": "folds_persistence_better"}),
+        width="stretch", hide_index=True,
+    )
+
+    st.subheader("Results are dominated by three epidemic folds")
+    st.image(str(sg_fig("results_cv13_fold_detail.png")), width="stretch")
+    sg_fold_mae = sg13_folds[sg13_folds["model"] != PERSIST].groupby("first_test_target_week")["MAE"].sum()
+    sg_top3 = sg_fold_mae.nlargest(3)
+    st.markdown(
+        f"The three folds starting **{', '.join(sorted(sg_top3.index))}** — the 2020 and 2022 "
+        f"epidemic peaks — account for **{100 * sg_top3.sum() / sg_fold_mae.sum():.0f}%** of all "
+        "model absolute error summed across folds. Mean MAE, and therefore the 5% rule, is "
+        "largely decided by those three folds; in the quiet folds all windows are within a "
+        "few cases of each other."
+    )
+    with st.expander("Per-fold MAE: persistence vs each model at 1 and 12 weeks"):
+        sg_piv = sg13_folds[sg13_folds["history_window"].isin([1, 12])].pivot_table(
+            index=["fold", "first_test_target_week", "last_test_target_week"],
+            columns=["model", "history_window"], values="MAE")
+        sg_piv.columns = [f"{m} · {w} wk" for m, w in sg_piv.columns]
+        sg_piv = sg_piv.drop(columns=[f"{PERSIST} · 12 wk"]).rename(
+            columns={f"{PERSIST} · 1 wk": "Persistence"})
+        st.dataframe(sg_piv.reset_index().round(1), width="stretch", hide_index=True)
+
+    with st.expander("Pre-registered minimum-sufficient-window rule, applied to the Singapore CV means"):
+        st.markdown("**13 folds of 13 weeks**")
+        st.dataframe(load_sg_csv("sg_cv13_minimum_sufficient_window.csv"), width="stretch", hide_index=True)
+        st.dataframe(load_sg_csv("sg_cv13_near_optimal.csv"), width="stretch", hide_index=True)
+        st.markdown("**6 folds of 26 weeks** (descriptive only)")
+        st.dataframe(load_sg_csv("sg_cv26_minimum_sufficient_window.csv"), width="stretch", hide_index=True)
+        st.caption(
+            "Unchanged rule: a window is near-optimal if its mean MAE is within 5% of the "
+            "best window's; the minimum sufficient window is the shortest near-optimal one. "
+            "It selects 1 week for both models in both designs. The rule is applied to mean "
+            "MAE, which the epidemic folds dominate."
+        )
+
+    with st.expander("6-fold / 26-week design and single chronological split"):
+        st.image(str(sg_fig("results_cv26_mae_vs_history_window.png")), width="stretch")
+        st.dataframe(
+            load_sg_csv("sg_cv26_extended_summary.csv")
+            [["history_window", "model", "MAE_mean", "MAE_median", "MAE_std", "n_folds"]]
+            .sort_values(["model", "history_window"]),
+            width="stretch", hide_index=True,
+        )
+        st.caption("Six folds cannot reach significance after adjustment, so this design is descriptive.")
+        st.markdown("**Single 70/15/15 split** (models trained once, on data ending 2019-W40)")
+        st.dataframe(load_sg_csv("sg_results_table.csv")
+                     [["history_window", "model", "MAE", "RMSE", "val_MAE", "n_train", "n_test"]],
+                     width="stretch", hide_index=True)
+
+    with st.expander("Fold layout and data audit"):
+        st.dataframe(load_sg_table("protocol_fold_plan_13w.csv"), width="stretch", hide_index=True)
+        st.dataframe(load_sg_table("eda_annual_summary.csv"), width="stretch", hide_index=True)
+        st.caption(
+            "All 574 weekly values match the MOH Weekly Infectious Disease Bulletin source. "
+            "No missing weeks; weeks run Sunday–Saturday, with week 53 in 2014 and 2020."
+        )
+
+    st.subheader("Caveats specific to Singapore")
+    st.markdown(
+        """
+        - **External validation, different target.** MOH dengue fever notifications with
+          DHF excluded are not the same quantity as DengAI's `total_cases`.
+        - **Unrepresentative evaluation period.** 2019-W41 to 2022-W52 holds two record
+          epidemics and the COVID-19 years; nothing here describes typical performance.
+        - **Three epidemic folds dominate** every mean on this tab.
+        - **Folds overlap in time through their training data.** Test blocks do not
+          overlap, but each fold's training set contains the previous fold's, so folds
+          are not independent and the **p-values are likely too small**.
+        - **Extrapolation.** In the folds covering the 2020 rise, targets exceed anything
+          in training; tree models cannot predict above that, persistence can.
+        - **Medians, intervals and tests are additions** to the original method and were
+          not applied to San Juan or Iquitos.
+        - **Pending:** the overlap check against the second Singapore CSV (2014–2018)
+          has not been done.
+        """
+    )
+    st.caption(
+        "Full write-up: `singapore_analysis/singapore_results.md`. Protocol fixed before "
+        "the run: `singapore_analysis/singapore_experiment_protocol.md`."
+    )

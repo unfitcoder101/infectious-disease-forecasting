@@ -1,0 +1,9 @@
+test_block_weeks,n_folds,unused_weeks,in_original_8_to_10_target
+13,13,0,False
+20,8,9,True
+21,8,1,True
+22,7,15,False
+23,7,8,False
+24,7,1,False
+25,6,19,False
+26,6,13,False

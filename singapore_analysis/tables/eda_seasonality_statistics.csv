@@ -1,0 +1,16 @@
+statistic,value
+r2_week_of_year_on_cases,0.12117265752853856
+r2_year_on_cases,0.4863456377677998
+r2_week_of_year_on_log_cases,0.060034073253317666
+r2_year_on_log_cases,0.7417415012216365
+r2_week_of_year_on_year_demeaned_log_cases,0.23245729971054618
+peak_week_of_mean_profile,27.0
+trough_week_of_mean_profile,12.0
+peak_to_trough_ratio_of_mean_profile,2.1601320754774616
+share_of_cases_weeks_1_13_pct,18.387995503201527
+share_of_cases_weeks_14_26_pct,30.503079329390488
+share_of_cases_weeks_27_39_pct,33.147392345666944
+share_of_cases_weeks_40_52_pct,17.96153282174104
+peak_week_number_min,1.0
+peak_week_number_max,52.0
+years_peaking_in_weeks_23_to_35,5.0

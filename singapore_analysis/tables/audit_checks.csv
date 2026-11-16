@@ -1,0 +1,21 @@
+check,result,detail
+Total observations,574,expected 574
+Columns,"time_index, epi_week, epi_year, epi_week_number, dengue_fever_cases",
+Data types,time_index=int64; epi_week=str; epi_year=int64; epi_week_number=int64; dengue_fever_cases=int64,
+File encoding,"no BOM, LF line endings",
+Missing values (any column),0,
+Fully duplicated rows,0,
+Duplicate epi_week labels,0,
+"Duplicate (epi_year, epi_week_number)",0,
+Duplicate time_index,0,
+Negative case counts,0,
+Zero case counts,0,
+Non-integer case counts,0,
+time_index is exactly 1..N,True,
+epi_week label agrees with epi_year and epi_week_number,True,
+"Chronologically ordered (year, week strictly increasing)",True,
+Years whose weeks are not contiguous from 1,0,[]
+Years covered,2012-2022,"11 years, none missing: True"
+"Derived week-start gaps (Sun-Sat, >=4-day rule)",{7.0: 573},all 7 days means the labels form one gapless weekly sequence
+Derived week starts all fall on a Sunday,True,
+Derived date range (first week start -> last week end),2012-01-01 -> 2022-12-31,

@@ -1,0 +1,4 @@
+part,rows,first_target_week,last_target_week,target_mean,target_max
+train,393,2012-W13,2019-W40,221.95674300254453,888.0
+validation,84,2019-W41,2021-W19,489.82142857142856,1791.0
+test,85,2021-W20,2022-W52,410.3411764705882,1563.0

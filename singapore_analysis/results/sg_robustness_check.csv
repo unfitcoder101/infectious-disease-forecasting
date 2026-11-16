@@ -1,0 +1,3 @@
+model,test_best_window,val_best_window,test_min_sufficient,val_min_sufficient,test_spread_pct,val_spread_pct,periods_agree
+XGBoost,1,1,1,1,49.79638450456615,31.89157872311161,True
+LightGBM,1,1,1,1,15.525017206304053,17.61526728386885,True
