@@ -86,13 +86,35 @@ def fig(name: str):
 
 
 def model_bar(df: pd.DataFrame, x_col: str, y_col: str, title: str):
-    """A native, interactive bar chart for a metric by history_window, one
-    series per model, using the SAME fixed hue order as every static figure
+    """Grouped (side-by-side) bar chart for a metric by history_window, one bar
+    per model per window, using the SAME fixed hue order as every static figure
     in this project (XGBoost blue, LightGBM orange -- never swapped, never
-    re-derived from data order)."""
-    pivot = df[df["model"].isin(SERIES_COLORS)].pivot(index=x_col, columns="model", values=y_col)
-    pivot = pivot[[m for m in SERIES_COLORS if m in pivot.columns]]  # fixed order
-    st.bar_chart(pivot, color=[SERIES_COLORS[m] for m in pivot.columns], height=320)
+    re-derived from data order).
+
+    Explicit Altair spec rather than st.bar_chart, which stacks the series,
+    sorts string x labels alphabetically and binds the axes to scroll-zoom
+    (zooming clips every bar taller than the visible range to the same
+    height). Here windows are numeric and sorted, the y axis starts at zero
+    and the chart is not zoomable."""
+    d = df[df["model"].isin(SERIES_COLORS)][[x_col, "model", y_col]].copy()
+    d[x_col] = d[x_col].astype(int)
+    d = d.sort_values([x_col, "model"])
+    windows = sorted(d[x_col].unique().tolist())
+    st.altair_chart(
+        alt.Chart(d).mark_bar().encode(
+            x=alt.X(f"{x_col}:O", sort=windows, title=None, axis=alt.Axis(labelAngle=0)),
+            xOffset=alt.XOffset("model:N", sort=list(SERIES_COLORS)),
+            y=alt.Y(f"{y_col}:Q", title=None, scale=alt.Scale(domainMin=0)),
+            color=alt.Color("model:N", title=None, sort=list(SERIES_COLORS),
+                            scale=alt.Scale(domain=list(SERIES_COLORS),
+                                            range=list(SERIES_COLORS.values())),
+                            legend=alt.Legend(orient="bottom")),
+            tooltip=[alt.Tooltip(f"{x_col}:O", title="Window"),
+                     alt.Tooltip("model:N", title="Model"),
+                     alt.Tooltip(f"{y_col}:Q", title=y_col, format=".2f")],
+        ).properties(height=320),
+        width="stretch",
+    )
     st.caption(title)
 
 
@@ -513,6 +535,13 @@ in general.
             15. **This entire result is specific to San Juan dengue, this
                 preprocessing, these two models/hyperparameters, this
                 one-step-ahead horizon, and this evaluation design.**
+            16. **Singapore external validation exists, but is not a
+                replication.** (Added after §8; see `research_notes.md` §10
+                and the Singapore tab.) It uses a different case definition
+                (MOH Dengue Fever notifications, DHF excluded), so its errors
+                are not comparable with the San Juan or Iquitos numbers. Its
+                evaluation period (2019-W41 to 2022-W52) includes the 2020 and
+                2022 epidemics.
             """
         )
     st.caption("Verbatim from the committed research_notes.md §8 — see the repository for the full document.")
@@ -611,8 +640,8 @@ had higher mean MAE than "next week = this week".
                    "lag 4–5. Orange bars mark the study's window lengths.")
 
     st.subheader("MAE by history window — XGBoost vs LightGBM (13-fold CV mean)")
-    # Grouped (side-by-side) bars, one per model per window. Singapore tab only:
-    # the shared model_bar helper (used by the San Juan tabs) is left unchanged.
+    # Grouped (side-by-side) bars, one per model per window. Same approach as the
+    # shared model_bar helper, with axis titles and unit added for this tab.
     sg_bar = sg13_models[sg13_models["model"].isin(SERIES_COLORS)][["history_window", "model", "MAE_mean"]].copy()
     sg_bar["history_window"] = sg_bar["history_window"].astype(int)
     sg_bar = sg_bar.sort_values(["history_window", "model"])
