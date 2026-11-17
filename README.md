@@ -112,3 +112,24 @@ NOAA/CDC Dengue Forecasting Project (2015) via the DrivenData "DengAI" dataset.
 Real data, not synthetic. The original NOAA host is offline; files were taken from
 two independent mirrors and verified byte-identical. See `data/raw/SOURCE.md`.
                                 
+
+## Singapore external validation
+
+**External validation, not replication.** The method was re-run on Singapore
+Ministry of Health weekly dengue fever notifications (DHF excluded), 2012–2022. The
+case definition differs from DengAI, so no Singapore error value is comparable with
+the San Juan or Iquitos results, and the series are never pooled. Everything lives
+in `singapore_analysis/`, separate from `results/`, and appears on the dashboard's
+"Singapore External Validation" tab.
+
+- **The 5% rule selected 1 week**, but no window is claimed optimal. "Lowest
+  observed" error is not "meaningfully better": short and long history were **not
+  statistically separable (p = 0.68)**.
+- **Persistence beat every model.** Holm-adjusted significance against persistence
+  is indicative only, because folds are not independent.
+- The evaluation period (2019-W41 to 2022-W52) includes the 2020 and 2022
+  epidemics, and the results are dominated by three epidemic folds.
+- The overlap check against the second Singapore CSV is pending.
+
+Details: `research_notes.md` §10 and `singapore_analysis/singapore_results.md`.
+Source and licence: `data/raw/SOURCE.md`.

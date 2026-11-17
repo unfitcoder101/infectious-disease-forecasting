@@ -520,3 +520,93 @@ the targeted follow-up:
 an exact minimum sufficient window.** We explicitly do **not** conclude that any
 particular window is optimal for infectious disease forecasting in general, or
 that a single window within {1, 2, 4} is optimal for this dataset in particular.
+
+---
+
+## 10. EXTERNAL VALIDATION: SINGAPORE
+
+*Added after sections 1–9. Nothing above this heading was changed, and no San
+Juan or Iquitos number or conclusion is revised by this section. Full write-up:
+`singapore_analysis/singapore_results.md`; outputs: `singapore_analysis/results/`
+(`sg_*.csv`), `figures/`, `tables/`.*
+
+### 10.1 What this is, and what it is not
+
+**External validation, not replication.** The target is the Singapore Ministry of
+Health weekly **Dengue Fever** count (DHF excluded), 574 weeks, 2012-W01 to
+2022-W52. Its case definition differs from DengAI `total_cases` (notified cases
+classified as Dengue Fever, against laboratory-positive plus estimated cases in
+San Juan and Iquitos), and so do week dating, ascertainment, era and scale. Errors
+are in cases, and Singapore's counts are about 11 times San Juan's, so **no
+Singapore MAE or RMSE can be compared numerically with any number in sections
+4–6.** Singapore is analysed separately and is never pooled with the DengAI series.
+See `singapore_analysis/singapore_target_comparability.md`.
+
+The method is the original one, unchanged: windows 1/2/4/8/12, XGBoost and
+LightGBM at the fixed hyperparameters, persistence baseline, MAE and RMSE,
+rolling-origin CV, the 5% rule. Medians, confidence intervals, Wilcoxon
+signed-rank tests on paired fold differences and Holm adjustment are **additions**
+for Singapore and were not applied to San Juan or Iquitos.
+
+### 10.2 Design
+
+562 aligned rows; the evaluation period is **2019-W41 to 2022-W52** (169 weeks),
+which includes the 2020 and 2022 epidemics. The design that carries the
+statistical comparisons is 13 folds of 13 weeks; 6 folds of 26 weeks and a single
+chronological split are descriptive. The protocol was written, and the three
+design decisions approved, before any model was trained
+(`singapore_analysis/singapore_experiment_protocol.md`).
+
+### 10.3 Results (13 folds of 13 weeks, mean MAE in cases)
+
+| Window | XGBoost | LightGBM |
+|---|---|---|
+| 1 | 73.35 | 83.88 |
+| 2 | 86.45 | 87.45 |
+| 4 | 82.20 | 84.27 |
+| 8 | 86.87 | 95.77 |
+| 12 | 87.09 | 93.83 |
+| Persistence | 54.70 | |
+
+- **The 5% rule selected 1 week** for both models in both CV designs and on both
+  periods of the single split. **No window is claimed optimal.**
+- **"Lowest observed" is not "meaningfully better".** Window 1 has the lowest
+  observed mean MAE for both models, but none of its paired comparisons against
+  other windows is significant after Holm adjustment (smallest adjusted p = 0.34).
+  Medians rank the windows less cleanly: for XGBoost the lowest median MAE is
+  window 2, not window 1.
+- **Short against long: not statistically separable (p = 0.68).** The primary
+  contrast, short {1, 2, 4} against long {8, 12}, favours short in mean and median
+  for both models, with Holm-adjusted p = 0.68 for both. The direction is similar
+  to San Juan's; Singapore does not establish a difference.
+- **Persistence beat every model.** All 10 model/window configurations had higher
+  mean and median MAE than "next week = this week", in both CV designs. In 7 of
+  10 the difference is nominally significant after Holm adjustment; because folds
+  are not independent (they are consecutive blocks sharing training data),
+  these p-values are **indicative only** and probably too small.
+
+### 10.4 What drives the numbers
+
+Three folds (target weeks starting 2020-W15, 2020-W28 and 2022-W14, the 2020 and
+2022 epidemic peaks) account for 68% of the models' summed absolute error. **The
+results are dominated by these three epidemic folds**. In the two 2020 folds the
+targets exceed anything in the training data, which tree models cannot
+extrapolate; this was left uncorrected by design. In the quiet folds all windows
+are within a few cases of each other. The mean-based 5% rule therefore largely
+reflects how each window handles three folds.
+
+### 10.5 Limitations specific to the Singapore run
+
+1. The evaluation period (two record epidemics, the COVID-19 years) is not
+   representative of typical Singapore performance.
+2. Folds overlap in time through their training data, so intervals are probably too
+   narrow and p-values too small.
+3. The 6-fold design cannot reach significance after adjustment (smallest possible
+   p = 0.031), so it is descriptive only.
+4. The t-interval and bootstrap interval disagree for several comparisons; neither
+   is relied on where they disagree.
+5. All limitations in section 8 still apply (fixed hyperparameters, one-step
+   horizon, raw counts, no covariates).
+6. **The overlap check against the second Singapore CSV (2014–2018) is pending.**
+   That file covers the same surveillance system and overlapping years, so it
+   would be a data-consistency check, not independent evidence.
