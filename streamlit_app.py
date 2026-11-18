@@ -31,6 +31,11 @@ SG_RESULTS_DIR = SG_DIR / "results"
 SG_FIG_DIR = SG_DIR / "figures"
 SG_TABLES_DIR = SG_DIR / "tables"
 
+# Brazil external validation: separate immutable snapshot and outputs.
+BR_DIR = BASE_DIR / "brazil_analysis"
+BR_RESULTS_DIR = BR_DIR / "results"
+BR_FIG_DIR = BR_RESULTS_DIR / "figures"
+
 # Same categorical hues already validated and used in every existing figure
 # in results/figures/ (src/visualization.py SERIES_COLORS) -- reused here,
 # never re-picked, so native charts and embedded PNGs read as one system.
@@ -63,9 +68,23 @@ def load_sg_csv(name: str) -> pd.DataFrame:
 
 
 @st.cache_data
+def load_br_csv(name: str) -> pd.DataFrame:
+    """Brazil external-validation result table (read-only)."""
+    return pd.read_csv(BR_RESULTS_DIR / name)
+
+
+@st.cache_data
 def load_sg_table(name: str) -> pd.DataFrame:
     """Singapore audit/EDA/protocol table from singapore_analysis/tables/ (read-only)."""
     return pd.read_csv(SG_TABLES_DIR / name)
+
+
+def br_fig(name: str):
+    """Path to an existing Brazil external-validation figure."""
+    p = BR_FIG_DIR / name
+    if not p.exists():
+        st.error(f"Expected figure not found: {p}")
+    return p
 
 
 def sg_fig(name: str):
@@ -205,7 +224,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg = st.tabs(
+tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg, tab_br = st.tabs(
     [
         "📋 Overview",
         "📊 Single-Split (1/2/4/8/12 wk)",
@@ -213,6 +232,7 @@ tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg = st.tabs(
         "🎯 Targeted Follow-up (21-fold)",
         "✅ Conclusion & Limitations",
         "🌏 Singapore External Validation",
+        "🇧🇷 Brazil External Validation",
     ]
 )
 
@@ -812,4 +832,119 @@ had higher mean MAE than "next week = this week".
     st.caption(
         "Full write-up: `singapore_analysis/singapore_results.md`. Protocol fixed before "
         "the run: `singapore_analysis/singapore_experiment_protocol.md`."
+    )
+
+
+# ===========================================================================
+# TAB 7 — BRAZIL EXTERNAL VALIDATION
+# Reads only from brazil_analysis/results and figures.
+# ===========================================================================
+with tab_br:
+    st.markdown(
+        """
+        <div class="research-banner">
+        <b>Post-hoc external validation, not a preregistered replication.</b>
+        InfoDengue reported dengue cases (`casos`) for Rio de Janeiro municipality,
+        2010–2025. Source snapshot, API query, and checksum are documented in
+        <code>brazil_analysis/SOURCE.md</code>.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "📍 <b>Scope: Rio de Janeiro only.</b> Same 1/2/4/8/12-week lag windows, "
+        "fixed models and persistence baseline. All values on this tab are cases "
+        "per week and must not be numerically compared with San Juan, Iquitos, or "
+        "Singapore. The 5% rule is descriptive; it is not a significance test.",
+        icon="📍",
+    )
+    br26 = load_br_csv("brazil_cv26_summary.csv")
+    br13 = load_br_csv("brazil_cv13_summary.csv")
+    br26_models = br26[br26["model"].isin(SERIES_COLORS)]
+    br13_models = br13[br13["model"].isin(SERIES_COLORS)]
+    br_persist26 = br26.loc[br26["model"] == "Persistence (baseline)", "MAE_mean"].iloc[0]
+    br_persist13 = br13.loc[br13["model"] == "Persistence (baseline)", "MAE_mean"].iloc[0]
+    br_best = br26_models.loc[br26_models["MAE_mean"].idxmin()]
+    br_min26 = load_br_csv("brazil_cv26_minimum_sufficient_window.csv")
+    br_min13 = load_br_csv("brazil_cv13_minimum_sufficient_window.csv")
+
+    a, b, c, d = st.columns(4)
+    a.metric("Lowest 26-week CV mean MAE", f"{br_best['MAE_mean']:.1f} cases")
+    b.metric("Window / model", f"{int(br_best['history_window'])} wk · {br_best['model']}")
+    c.metric("Persistence · 26-week CV", f"{br_persist26:.1f}")
+    d.metric("Persistence · 13-week CV", f"{br_persist13:.1f}")
+    st.caption("Lowest observed mean is descriptive, not proof of a better window.")
+
+    st.subheader("Mean MAE by history window")
+    br_mean = br26_models[["history_window", "model", "MAE_mean"]].copy()
+    br_mean = br_mean.rename(columns={"history_window": "window", "MAE_mean": "mae"})
+    br_mean["model"] = br_mean["model"].replace({"XGBoost": "XGBoost", "LightGBM": "LightGBM"})
+    br_mean["window"] = br_mean["window"].astype(int)
+    br_mean = br_mean.sort_values(["window", "model"])
+    br_windows = sorted(br_mean["window"].unique().tolist())
+    st.altair_chart(
+        alt.Chart(br_mean).mark_bar().encode(
+            x=alt.X("window:O", sort=br_windows, title="History window (weeks)", axis=alt.Axis(labelAngle=0)),
+            xOffset=alt.XOffset("model:N", sort=list(SERIES_COLORS)),
+            y=alt.Y("mae:Q", title="Mean MAE (cases)", scale=alt.Scale(domainMin=0)),
+            color=alt.Color("model:N", title=None, sort=list(SERIES_COLORS),
+                            scale=alt.Scale(domain=list(SERIES_COLORS), range=list(SERIES_COLORS.values()))),
+            tooltip=[alt.Tooltip("window:O", title="Window (weeks)"), alt.Tooltip("model:N"),
+                     alt.Tooltip("mae:Q", title="Mean MAE", format=".2f")],
+        ).properties(height=320), width="stretch",
+    )
+    st.caption(f"26-week CV: 9 expanding-window folds. Persistence MAE: {br_persist26:.2f}.")
+    st.image(str(br_fig("brazil_cv26_mae_vs_history_window.png")), width="stretch")
+
+    st.subheader("Results across both rolling-origin designs")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**26-week blocks · 9 folds (primary)**")
+        st.dataframe(br26[["history_window", "model", "MAE_mean", "MAE_std"]].round(2),
+                     width="stretch", hide_index=True)
+        st.markdown("**5% minimum-sufficient rule**")
+        st.dataframe(br_min26[["model", "best_window", "minimum_sufficient_window", "near_optimal_windows"]],
+                     width="stretch", hide_index=True)
+    with col2:
+        st.markdown("**13-week blocks · 19 folds (secondary)**")
+        st.dataframe(br13[["history_window", "model", "MAE_mean", "MAE_std"]].round(2),
+                     width="stretch", hide_index=True)
+        st.markdown("**5% minimum-sufficient rule**")
+        st.dataframe(br_min13[["model", "best_window", "minimum_sufficient_window", "near_optimal_windows"]],
+                     width="stretch", hide_index=True)
+
+    st.markdown(
+        """
+        <div class="finding-box">
+
+**Four weeks had the lowest mean MAE for both models in both CV designs.**
+The 5% rule selected 4 weeks for XGBoost and 1 week for LightGBM, so it does
+not provide one common minimum across models. Fold winners varied, and fold MAE
+standard deviations (about 289–566 cases) were much larger than many differences
+between window means. Persistence was lower than every model mean in 13-week CV;
+in 26-week CV it was close to the XGBoost 4-week mean.
+
+**Interpretation:** Rio supports the possibility that 1–4 weeks is often enough
+for this setup, but does not prove a unique best window. Treat Brazil as
+supporting external evidence, not as universal confirmation.
+
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.subheader("Single chronological split")
+    st.dataframe(load_br_csv("brazil_results_table.csv").round(2), width="stretch", hide_index=True)
+    st.caption("124 held-out test weeks; the persistence test MAE is 319.77 cases. Both models had higher validation error than persistence at every window.")
+
+    with st.expander("Fold winners and detailed report"):
+        st.markdown("**26-week fold wins**")
+        st.dataframe(load_br_csv("brazil_cv26_fold_win_counts.csv"), width="stretch", hide_index=True)
+        st.markdown("**13-week fold wins**")
+        st.dataframe(load_br_csv("brazil_cv13_fold_win_counts.csv"), width="stretch", hide_index=True)
+        st.markdown("Full protocol, result interpretation, caveats and references: [`brazil_analysis/brazil_results.md`](https://github.com/unfitcoder101/infectious-disease-forecasting/blob/main/brazil_analysis/brazil_results.md).")
+
+    st.subheader("Updated conclusion across four dengue settings")
+    st.markdown(
+        "Across San Juan, Iquitos, Singapore and Rio, histories of 1–4 weeks were often competitive, and adding history beyond 4 weeks did not provide a consistent improvement under the experiments run. The shortest adequate window varied by setting, model, time period and evaluation design. **No single window is established as generally optimal.** These are separate surveillance series with different case definitions and scales; their absolute errors are not pooled or ranked. Brazil broadens the dengue evidence but does not establish transfer to India, COVID-19, or other diseases. See `research_notes.md` §11.4."
     )

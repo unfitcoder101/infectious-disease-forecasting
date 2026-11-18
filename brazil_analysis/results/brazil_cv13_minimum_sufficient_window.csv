@@ -1,0 +1,4 @@
+model,best_window,best_MAE_mean,best_MAE_std,tolerance,mae_threshold,minimum_sufficient_window,near_optimal_windows,min_sufficient_within_1std_of_best
+LightGBM,4,195.38435673369509,437.5923704068782,0.05,205.15357457037985,1,"1, 2, 4",True
+Persistence (baseline),1,186.7165991902834,456.35176811399594,0.05,196.05242914979758,1,"1, 2, 4, 8, 12",True
+XGBoost,4,186.63738826025835,399.9291515548681,0.05,195.96925767327127,4,"4, 8, 12",True

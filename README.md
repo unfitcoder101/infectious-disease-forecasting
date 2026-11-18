@@ -26,9 +26,10 @@ XGBoost: window 2). **No window is claimed to be optimal.** The honest,
 final conclusion is that this study identifies a short-history regime rather
 than an exact minimum sufficient window.
                  
-See [`research_notes.md`](research_notes.md) §§5–9 for the full CV methodology,
-the targeted follow-up, and all limitations. Results are reported for **this
-dataset and configuration only**.
+See [`research_notes.md`](research_notes.md) §§5–11 for the full CV methodology,
+the targeted follow-up, external validations, and limitations. The project-level
+conclusion is now informed by four separately analysed dengue settings; errors
+are never pooled across datasets.
 
 ## Setup
 
@@ -133,3 +134,25 @@ in `singapore_analysis/`, separate from `results/`, and appears on the dashboard
 
 Details: `research_notes.md` §10 and `singapore_analysis/singapore_results.md`.
 Source and licence: `data/raw/SOURCE.md`.
+
+
+## Brazil external validation
+
+A separate post-hoc run applies the same 1/2/4/8/12-week history experiment to
+InfoDengue reported dengue cases in Rio de Janeiro (2010–2025). It is isolated
+under `brazil_analysis/`; existing data and results are preserved. Four weeks
+had the lowest rolling-origin mean MAE for both models in both fold designs,
+but the 5% rule selected 4 weeks for XGBoost and 1 week for LightGBM. Fold
+variation was large and persistence was competitive. This supports short history
+as a plausible pattern in Rio, but establishes no unique optimum or universal
+result. Brazil's raw errors are not compared with the other settings.
+
+- Reproduce: `python brazil_analysis/run_brazil_experiment.py --execute`
+- Data source, query, date, and checksum: [`brazil_analysis/SOURCE.md`](brazil_analysis/SOURCE.md)
+- Protocol and detailed interpretation: [`brazil_analysis/brazil_experiment_protocol.md`](brazil_analysis/brazil_experiment_protocol.md), [`brazil_analysis/brazil_results.md`](brazil_analysis/brazil_results.md)
+- Frozen API snapshot: `brazil_analysis/data/raw/infodengue_rio_2010_2025_snapshot_20261118.csv`
+- Results and figures: `brazil_analysis/results/`
+
+The final four-setting synthesis is in `research_notes.md` §11.4. This is still
+a dengue study; Brazil does not constitute validation on COVID-19, India, or a
+different disease.
