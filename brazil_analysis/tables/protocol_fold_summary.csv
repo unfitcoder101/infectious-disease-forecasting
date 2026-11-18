@@ -1,0 +1,3 @@
+block_weeks,aligned_rows,minimum_train_rows,folds,unused_rows
+26,823,576,9,13
+13,823,576,19,0

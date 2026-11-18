@@ -610,3 +610,97 @@ reflects how each window handles three folds.
 6. **The overlap check against the second Singapore CSV (2014–2018) is pending.**
    That file covers the same surveillance system and overlapping years, so it
    would be a data-consistency check, not independent evidence.
+
+---
+
+## 11. EXTERNAL VALIDATION: BRAZIL (RIO DE JANEIRO)
+
+*Added after the existing San Juan, Iquitos, and Singapore analyses. This is a
+post-hoc external validation; sections 1–10 and their source data/results were
+not overwritten. Full analysis: `brazil_analysis/brazil_results.md`; protocol,
+source query, snapshot checksum, outputs, and runner are recorded under
+`brazil_analysis/`.*
+
+### 11.1 Data and method
+
+InfoDengue reported weekly dengue cases (`casos`) for Rio de Janeiro municipality
+(IBGE geocode 3304557), 835 observations from 2010-01-03 through 2025-12-28.
+The frozen API snapshot has no missing values or weekly gaps; maximum reported
+count is 16,339. InfoDengue retrospectively revises data. We used the snapshot
+retrieved 2026-11-18 and did not use its `casos_est` nowcast field. The exact API
+query and SHA-256 are in `brazil_analysis/SOURCE.md`.
+
+The existing 1/2/4/8/12-week lag windows, fixed XGBoost and LightGBM settings,
+next-week target, and persistence baseline were retained. The run includes a
+chronological 70/15/15 split, 9 rolling-origin folds of 26 weeks (primary), and
+19 folds of 13 weeks (secondary). No tuning, covariates, transformations,
+pooling, or changes to other series were introduced. This analysis was added
+post hoc, not preregistered; CV folds share expanding training histories and are
+not independent.
+
+### 11.2 Rolling-origin results (mean MAE, cases)
+
+| Window | XGBoost, 26 wk | LightGBM, 26 wk | XGBoost, 13 wk | LightGBM, 13 wk |
+|---:|---:|---:|---:|---:|
+| 1 | 217.91 | 210.45 | 207.37 | 199.31 |
+| 2 | 244.52 | 208.66 | 229.04 | 198.76 |
+| 4 | **186.11** | **202.73** | **186.64** | **195.38** |
+| 8 | 198.35 | 232.49 | 192.75 | 220.64 |
+| 12 | 200.34 | 231.72 | 195.08 | 217.01 |
+| Persistence | 195.06 | 195.06 | 186.72 | 186.72 |
+
+Four weeks had the lowest mean MAE for both models in both CV designs. The
+project's descriptive 5% rule selected 4 weeks as minimum sufficient for
+XGBoost and 1 week for LightGBM in both designs. This is not a unique
+cross-model answer. Fold winners varied: with 13-week blocks XGBoost's 12-week
+window won 8/19 folds, while LightGBM's 1-week window won 9/19. Fold MAE
+standard deviations (roughly 289–566 cases across these results) greatly exceed
+many differences between means. In 13-week CV persistence (186.72) beat every
+model/window mean; in 26-week CV, XGBoost at 4 weeks was slightly below
+persistence (186.11 vs 195.06).
+
+On the single held-out 124-week test period, persistence MAE was 319.77.
+XGBoost at 4, 8, and 12 weeks beat it (268.66, 302.99, and 307.05); LightGBM
+at 4 weeks was nearly tied (318.77). Every model/window was worse than
+persistence on the validation period. The test period included a peak of 16,339
+cases. This split dependence cautions against selecting a window from one
+period alone.
+
+### 11.3 Brazil interpretation
+
+Brazil is consistent with the possibility that longer histories are unnecessary
+for this particular next-week univariate setup: the 4-week mean was best, and
+8–12 weeks did not improve mean MAE in the two rolling-origin designs. But this
+is **supporting evidence, not confirmation of a universal optimum**. The
+minimum-sufficient rule differs by model, fold winners vary, temporal dispersion
+is high, and persistence is competitive or better depending on evaluation
+period. The result is specific to Rio's reported-count series, its dated
+snapshot, these models/settings, and these evaluation designs.
+
+### 11.4 Updated project-level conclusion across four settings
+
+Across San Juan, Iquitos, Singapore, and Rio, the project can now ask whether
+short histories remain competitive across distinct dengue surveillance
+settings. The cautious synthesis is: **in these four series, and under the
+fixed one-step-ahead experiments run here, adding history beyond four weeks did
+not produce a consistent improvement; windows of one to four weeks were often
+competitive, but the shortest adequate window varied by series, model, time
+period, and evaluation design.** No single history window has been established
+as generally optimal, even for all four dengue series. This does not establish
+anything about COVID-19, India, other diseases, tuned models, longer forecast
+horizons, or other data sources.
+
+The series have different case definitions, units, periods, ascertainment, and
+revision practices. **Keep errors within each dataset; do not pool or rank the
+absolute MAEs across cities/countries.** Brazil broadens external evidence but
+is one city from the same disease family, and its post-hoc status should remain
+visible in any report to the professor.
+
+### 11.5 References
+
+- InfoDengue, *Tutorial: Using the API with Python (English)*,
+  https://info.dengue.mat.br/tutorial_api_python/locale-en (accessed 2026-11-18).
+- InfoDengue, *API services and data dictionary*,
+  https://info.dengue.mat.br/services/api (accessed 2026-11-18).
+- Frozen Rio API request and exact snapshot checksum: `brazil_analysis/SOURCE.md`.
+- Project code and history: https://github.com/unfitcoder101/infectious-disease-forecasting; Brazil implementation review: https://github.com/unfitcoder101/infectious-disease-forecasting/pull/1.
