@@ -225,7 +225,7 @@ Per-fold MAE, 13-week design (`results/sg_cv13_results.csv`):
    the original method and were not applied to San Juan or Iquitos.
 7. All limitations of the original study still apply: fixed hyperparameters,
    one-step horizon, raw counts, no covariates.
-8. **The second Singapore CSV comparison is still pending.**
+8. **Cross-source counts differ in the separate MOH 2014–2018 Dengue/DHF file.** On 261 overlapping weeks, its Dengue count differs from the selected series in 52 weeks (range -8 to +1); the broader MOH Weekly Infectious Disease Bulletin source matches all 261 weeks exactly. The source-vintage difference is unresolved and does not change the forecast inputs used here. See `singapore_overlap_results.md`.
 
 ## 9. Conclusion
 

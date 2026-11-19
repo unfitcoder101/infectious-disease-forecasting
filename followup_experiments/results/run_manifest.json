@@ -1,0 +1,23 @@
+{
+  "python": "3.12.5",
+  "platform": "macOS-26.3.1-arm64-arm-64bit",
+  "numpy": "2.5.3",
+  "pandas": "3.0.5",
+  "scipy": "1.18.1",
+  "scikit_learn": "1.9.1",
+  "xgboost": "3.4.1",
+  "lightgbm": "4.7.0",
+  "random_seed": 42,
+  "python_random_seed": 42,
+  "numpy_seed": 42,
+  "history_windows": [
+    1,
+    2,
+    4,
+    8,
+    12
+  ],
+  "train_fraction": 0.7,
+  "test_block_weeks": 13,
+  "statistical_test": "Diebold-Mariano, absolute-error loss, horizon=1, HLN small-sample correction; Holm across all tests within each series"
+}

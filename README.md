@@ -130,7 +130,7 @@ in `singapore_analysis/`, separate from `results/`, and appears on the dashboard
   is indicative only, because folds are not independent.
 - The evaluation period (2019-W41 to 2022-W52) includes the 2020 and 2022
   epidemics, and the results are dominated by three epidemic folds.
-- The overlap check against the second Singapore CSV is pending.
+- The overlap check found 52 count differences in the separate 2014–2018 MOH Dengue/DHF table; the broader MOH weekly bulletin matches all overlapping weeks. The source-version difference is documented and remains unresolved.
 
 Details: `research_notes.md` §10 and `singapore_analysis/singapore_results.md`.
 Source and licence: `data/raw/SOURCE.md`.
@@ -156,3 +156,24 @@ result. Brazil's raw errors are not compared with the other settings.
 The final four-setting synthesis is in `research_notes.md` §11.4. This is still
 a dengue study; Brazil does not constitute validation on COVID-19, India, or a
 different disease.
+
+
+## Instructor follow-up results
+
+The new level-versus-log-change experiment is complete for San Juan, Iquitos,
+and Singapore. It uses the same 1/2/4/8/12-week lag windows and 13-week
+rolling-origin folds within each series, and reports case-scale and relative
+MAE, pointwise DM tests with Holm adjustment, and a seasonality sensitivity run.
+The change target improved Singapore's best observed model MAE but remained
+worse than persistence. No best-short versus best-long comparison was
+significant after correction, and no universal history window emerged.
+
+Details and all result tables: [`followup_experiments/research_update.md`](followup_experiments/research_update.md).
+Reproduce with `python followup_experiments/run_change_forecast.py --execute`;
+Python 3.12.5 and the exact package versions are recorded in
+`followup_experiments/results/run_manifest.json`.
+
+The Singapore cross-source overlap check is now complete. The separate
+2014–2018 MOH Dengue/DHF table differs in 52 of 261 Dengue weeks; the wider MOH
+Weekly Infectious Disease Bulletin source matches the project's selected series
+for all 261 weeks. See [`singapore_analysis/singapore_overlap_results.md`](singapore_analysis/singapore_overlap_results.md).

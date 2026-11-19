@@ -310,13 +310,15 @@ Not to be run until this protocol is approved.
 2. A second run reproduces every MAE and RMSE exactly.
 3. Persistence MAE is identical across the five windows within each fold.
 
-The execute path has been written but **has not been run**, so it is untested
-beyond the shared code exercised by the dry run and the statistics self-check.
+The execute path was subsequently run and its tables and figures were regenerated
+and checked against the report. See `followup_experiments/reproduction_audit.md`
+for the reproduction checks and `followup_experiments/research_update.md` for
+the follow-up results.
 
 ## 12. Open items
 
 | Item | Status |
 |---|---|
-| Second Singapore CSV (2014–2018 overlap) | **Pending.** Not in `data/raw/`. Does not block the experiment; the selected file already matches the MOH source. It will not be used as a second validation series |
+| Second Singapore CSV (2014–2018 overlap) | **Completed.** All 261 weeks aligned; 52 weeks differ from the separate MOH Dengue/DHF file. The broader MOH weekly bulletin matches all 261 weeks. See `singapore_overlap_results.md`. |
 | Decisions D1, D2, D3 | Awaiting your review |
 | Dating basis of the weekly counts | Unresolved; would need MOH bulletin methodology notes |

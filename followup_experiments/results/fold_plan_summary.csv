@@ -1,0 +1,4 @@
+series,observations,aligned_rows,min_train,test_block_weeks,n_folds,unused_test_rows
+San Juan,936,924,646,13,21,5
+Iquitos,520,508,355,13,11,10
+Singapore,574,562,393,13,13,0
