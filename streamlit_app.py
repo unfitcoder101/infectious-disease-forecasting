@@ -36,6 +36,11 @@ BR_DIR = BASE_DIR / "brazil_analysis"
 BR_RESULTS_DIR = BR_DIR / "results"
 BR_FIG_DIR = BR_RESULTS_DIR / "figures"
 
+# Instructor-requested level-versus-change follow-up (read-only outputs).
+FOLLOWUP_DIR = BASE_DIR / "followup_experiments"
+FOLLOWUP_RESULTS_DIR = FOLLOWUP_DIR / "results"
+FOLLOWUP_FIG_DIR = FOLLOWUP_DIR / "figures"
+
 # Same categorical hues already validated and used in every existing figure
 # in results/figures/ (src/visualization.py SERIES_COLORS) -- reused here,
 # never re-picked, so native charts and embedded PNGs read as one system.
@@ -74,6 +79,12 @@ def load_br_csv(name: str) -> pd.DataFrame:
 
 
 @st.cache_data
+def load_followup_csv(name: str) -> pd.DataFrame:
+    """Instructor follow-up result table (read-only)."""
+    return pd.read_csv(FOLLOWUP_RESULTS_DIR / name)
+
+
+@st.cache_data
 def load_sg_table(name: str) -> pd.DataFrame:
     """Singapore audit/EDA/protocol table from singapore_analysis/tables/ (read-only)."""
     return pd.read_csv(SG_TABLES_DIR / name)
@@ -82,6 +93,14 @@ def load_sg_table(name: str) -> pd.DataFrame:
 def br_fig(name: str):
     """Path to an existing Brazil external-validation figure."""
     p = BR_FIG_DIR / name
+    if not p.exists():
+        st.error(f"Expected figure not found: {p}")
+    return p
+
+
+def followup_fig(name: str):
+    """Path to an existing level/change relative-MAE figure."""
+    p = FOLLOWUP_FIG_DIR / name
     if not p.exists():
         st.error(f"Expected figure not found: {p}")
     return p
@@ -224,7 +243,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg, tab_br = st.tabs(
+tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg, tab_br, tab_followup = st.tabs(
     [
         "📋 Overview",
         "📊 Single-Split (1/2/4/8/12 wk)",
@@ -233,6 +252,7 @@ tab_overview, tab_single, tab_cv, tab_fine, tab_conclusion, tab_sg, tab_br = st.
         "✅ Conclusion & Limitations",
         "🌏 Singapore External Validation",
         "🇧🇷 Brazil External Validation",
+        "↔ Level vs Change Follow-up",
     ]
 )
 
@@ -947,4 +967,67 @@ supporting external evidence, not as universal confirmation.
     st.subheader("Updated conclusion across four dengue settings")
     st.markdown(
         "Across San Juan, Iquitos, Singapore and Rio, histories of 1–4 weeks were often competitive, and adding history beyond 4 weeks did not provide a consistent improvement under the experiments run. The shortest adequate window varied by setting, model, time period and evaluation design. **No single window is established as generally optimal.** These are separate surveillance series with different case definitions and scales; their absolute errors are not pooled or ranked. Brazil broadens the dengue evidence but does not establish transfer to India, COVID-19, or other diseases. See `research_notes.md` §11.4."
+    )
+
+
+# ===========================================================================
+# TAB 8 — LEVEL VERSUS CHANGE FOLLOW-UP
+# Reads only the separately generated followup_experiments outputs.
+# ===========================================================================
+with tab_followup:
+    st.markdown(
+        """
+        <div class="research-banner">
+        <b>Instructor-requested follow-up.</b> This compares direct case-count
+        forecasts with forecasts of next week's log change, reconstructed to
+        case counts before scoring. Both use the same 1/2/4/8/12-week lags,
+        rolling-origin test weeks and persistence baseline.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Relative MAE = model MAE ÷ persistence MAE for the selected series. "
+        "Values below 1 are lower error than persistence. Counts and errors are "
+        "kept separate by dataset."
+    )
+    selected_series = st.selectbox("Dengue series", ["San Juan", "Iquitos", "Singapore"], key="followup_series")
+    fsummary = load_followup_csv("all_models_relative_mae_summary.csv")
+    fsummary = fsummary[fsummary["series"] == selected_series].copy()
+    st.image(str(followup_fig(f"{selected_series.lower().replace(' ', '_')}_relative_mae.png")), width="stretch")
+    st.subheader("Case-scale errors and relative MAE")
+    st.dataframe(
+        fsummary[["method", "model", "history_window", "n_oos", "MAE", "RMSE",
+                  "persistence_MAE", "relative_MAE"]].round(3),
+        width="stretch", hide_index=True,
+    )
+    st.subheader("Diebold–Mariano tests on pointwise absolute errors")
+    dm_file = f"dm_tests_{selected_series.lower().replace(' ', '_')}.csv"
+    fdm = load_followup_csv(dm_file)
+    st.dataframe(
+        fdm[["comparison", "method", "model", "history_window", "short_window", "long_window",
+             "model_relative_MAE", "short_relative_MAE", "long_relative_MAE", "n_oos",
+             "mean_abs_error_difference", "p_value", "p_holm_within_series"]].round(4),
+        width="stretch", hide_index=True,
+    )
+    st.caption(
+        "Holm correction is applied across all 24 comparisons within this series. "
+        "The best-short/best-long comparison chooses configurations on the same "
+        "out-of-sample weeks it tests, so those p-values are exploratory. See "
+        "followup_experiments/research_update.md for the DM assumptions and caveats."
+    )
+    st.subheader("Selected seasonality sensitivity")
+    fseason = load_followup_csv("seasonality_sensitivity.csv")
+    st.dataframe(
+        fseason[fseason["series"] == selected_series][
+            ["method", "model", "configuration", "history_window", "MAE_without_seasonality",
+             "MAE_with_seasonality", "relative_MAE_without_seasonality",
+             "relative_MAE_with_seasonality", "change_in_MAE"]
+        ].round(3), width="stretch", hide_index=True,
+    )
+    st.markdown(
+        "**Interpretation:** the analysis did not identify a history window that "
+        "wins consistently. Log-change prediction helped Singapore relative to "
+        "direct-count prediction, but persistence still had lower MAE. See the "
+        "full tables and report in `followup_experiments/`."
     )

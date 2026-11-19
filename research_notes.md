@@ -607,9 +607,7 @@ reflects how each window handles three folds.
    is relied on where they disagree.
 5. All limitations in section 8 still apply (fixed hyperparameters, one-step
    horizon, raw counts, no covariates).
-6. **The overlap check against the second Singapore CSV (2014–2018) is pending.**
-   That file covers the same surveillance system and overlapping years, so it
-   would be a data-consistency check, not independent evidence.
+6. **The overlap check is complete.** Against the separate MOH 2014–2018 Dengue/DHF table, the project series has 52 count mismatches in 261 overlapping weeks (difference -8 to +1). The broader 2012–2022 MOH weekly bulletin matches all 261 weeks exactly. The reason for the difference between the official source files is unresolved; this does not constitute independent forecast validation. See `singapore_analysis/singapore_overlap_results.md`.
 
 ---
 
@@ -704,3 +702,56 @@ visible in any report to the professor.
   https://info.dengue.mat.br/services/api (accessed 2026-11-18).
 - Frozen Rio API request and exact snapshot checksum: `brazil_analysis/SOURCE.md`.
 - Project code and history: https://github.com/unfitcoder101/infectious-disease-forecasting; Brazil implementation review: https://github.com/unfitcoder101/infectious-disease-forecasting/pull/1.
+
+---
+
+## 12. INSTRUCTOR FOLLOW-UP: LEVEL VERSUS LOG-CHANGE FORECASTS
+
+*Added 2026-11-19. The full update and compact tables are in
+`followup_experiments/research_update.md`; code and outputs are in
+`followup_experiments/`.*
+
+The follow-up compares direct case-count prediction with a transformed change
+target, `log(y[t+1]+1) - log(y[t]+1)`, reconstructed to case counts before
+scoring. It uses the same five history windows and fixed XGBoost/LightGBM
+settings, plus persistence. All three datasets use the same per-series
+13-week rolling-origin rule (expanding 70% training); identical test weeks are
+shared across targets and configurations within each series. The data lengths
+allow 21 San Juan, 11 Iquitos, and 13 Singapore folds.
+
+The lowest observed direct/change configurations were:
+
+| Series | Persistence MAE | Best direct-count configuration | Best log-change configuration |
+|---|---:|---|---|
+| San Juan | 6.16 | LightGBM, 4 wk: 6.01 (relative MAE 0.975) | LightGBM, 2 wk: 5.97 (0.969) |
+| Iquitos | 4.66 | LightGBM, 1 wk: 4.60 (0.986) | LightGBM, 1 wk: 4.60 (0.986) |
+| Singapore | 54.70 | XGBoost, 1 wk: 73.35 (1.341) | LightGBM, 4 wk: 57.54 (1.052) |
+
+Relative MAE is model MAE divided by the same series' persistence MAE; below
+1 indicates a lower point-estimate error than persistence. No Singapore model
+configuration was below persistence. The change target improved Singapore
+compared with direct-count prediction but still did not beat the baseline.
+
+Pointwise DM tests used absolute errors, horizon 1, a small-sample correction,
+and Holm adjustment across all 24 comparisons within each series. No
+San Juan or Iquitos comparison was significant after correction. In Singapore,
+11/24 comparisons were significant, all showing larger model error than
+persistence. None of the twelve selected best-short-versus-best-long tests
+(two target types × two models per series) was significant after correction.
+The best-short/best-long configurations were selected using the same OOS MAE
+sample used in their test; those comparisons are exploratory. The DM h=1
+variance estimate does not include further autocorrelation lags, so serial
+correlation in weekly losses remains a limitation.
+
+A sensitivity run added sine/cosine week-of-year to only the selected short
+and long configurations. It improved MAE in 6/8 selected San Juan, 5/8 Iquitos,
+and 3/8 Singapore configurations. Effects went in both directions; the overall
+conclusion did not change. Full metrics, p-value tables, source overlap check,
+reproduction audit and environment versions are in the linked follow-up report.
+
+**Updated project conclusion:** there is no common winning history length.
+Short windows were often competitive, but the best observed configuration
+varies by series and target. Change prediction helped in Singapore but did not
+beat persistence. State that 1–4 weeks was often sufficient in these tested
+settings, with no clear universal winner; do not present 1, 2, or 4 weeks as a
+proved optimum.

@@ -12,7 +12,7 @@ It is one gapless sequence of 574 consecutive Sunday–Saturday weeks from
 1 January 2012 to 31 December 2022. The week-53 pattern is fully explained by
 MOH's week-numbering rule. No cleaning or imputation is needed.
 
-One item is **pending**: the comparison with the second Singapore CSV (section 7).
+The cross-source check against the separate 2014–2018 MOH dengue/DHF table is complete; the exact matches and count differences are recorded in section 7 and `singapore_overlap_results.md`.
 
 ## 2. Structural checks
 
@@ -156,28 +156,37 @@ Singapore has true 7-day weeks throughout.
 | A4 | The bulletin dates were read from a secondary archive, not from MOH PDFs | The MOH PDFs could not be opened as text during this audit | A1 would rest on the structural match alone, which is already unique among the rules tested |
 | A5 | Whether cases are assigned to a week by notification date or by onset date | **Not established.** No source read states it | Affects comparability with DengAI (see `singapore_target_comparability.md`), not the audit |
 
-## 7. Second Singapore CSV — pending
+## 7. Second Singapore CSV — completed 2026-11-19
 
-The second CSV (overlapping 2014–2018) is **not in `data/raw/`** and its
-filename was not supplied, so the overlap comparison has **not been done**.
+The official MOH *Weekly Number of Dengue and Dengue Haemorrhagic Fever Cases*
+dataset (data.gov.sg ID `d_ac1eecf0886ff0bceefbc51556247015`) was retrieved from
+the API and compared with the project's selected `dengue_fever_cases` series over
+2014-W01 to 2018-W52. All **261 expected weeks** appear in both files; there are
+no coverage mismatches. The series values are not identical: the dedicated
+MOH file's `Dengue` count matches 209 weeks and differs in **52 weeks** (19.9%),
+by -8 to +1 cases (dedicated MOH count minus project count). Differences are
+concentrated in 2016 (37 of 52 weeks); 2014 has no mismatches.
 
-When it is available the planned comparison is:
+The broader MOH *Weekly Infectious Disease Bulletin Cases* file (dataset ID
+`d_ca168b2cb763640d72c4600a68f9909e`) matches the selected project series exactly
+for all 261 weeks. Thus the discrepancy is specific to the separate 2014–2018
+Dengue/DHF release. Adding its DHF series to its Dengue values does not reconcile
+the mismatch; the combined value still differs in 100 weeks, and the difference
+is not equal to DHF week by week. Both files are official MOH releases. Available
+files do not establish whether this reflects a data vintage, revision, or another
+source difference, so we record it as unresolved and do not alter the selected
+series.
 
-1. Establish its provenance, case definition (DF only, DHF only, or both) and week labelling.
-2. Join to the selected file on epi-week label over 2014-W01 to 2018-W52 (261 weeks) and check that both sides have exactly the same weeks.
-3. Report per-week differences: count of exact matches, sign and size of differences, whether differences equal the DHF count for that week, and whether they cluster in time (which would indicate revisions) or at year ends (which would indicate a different week convention).
-4. Explain each class of difference. No value in the selected file will be overwritten.
-
-It will be treated as a second view of the same Singapore surveillance system,
-not as an independent replication. A likely candidate is the data.gov.sg dataset
-"Weekly Number of Dengue and Dengue Haemorrhagic Fever Cases" (2014–2018), but
-that is a guess and has not been confirmed as the file in question.
-
-The selected file's readiness does not depend on this comparison, because it
-already matches the MOH source exactly (section 3).
+The complete joined comparison is in `tables/overlap_check_2014_2018.csv`; all
+52 mismatch rows are in `tables/overlap_mismatched_weeks_2014_2018.csv`. Frozen
+source files, retrieval details, and checksums are in `data/raw/SOURCES.md` and
+`tables/overlap_check_summary.json`. A longer interpretation is in
+`singapore_overlap_results.md`. This is a source-consistency check, not an
+independent validation series.
 
 ## 8. Sources
 
 - [Weekly Infectious Disease Bulletin Cases — data.gov.sg](https://data.gov.sg/datasets/d_ca168b2cb763640d72c4600a68f9909e/view)
+- [Weekly Number of Dengue and Dengue Haemorrhagic Fever Cases — data.gov.sg](https://data.gov.sg/collections/509/datasets/d_ac1eecf0886ff0bceefbc51556247015/view)
 - [Singapore Weekly Infectious Disease Bulletin 2014 — FluTrackers archive](https://flutrackers.com/forum/forum/asia/seasonal-flu-2009-2014-including-h1n1-pandemic-2009-ab/singapore-aa/157811-singapore-weekly-infectious-disease-bulletin-2014)
 - [Singapore Weekly Infectious Disease Bulletin 2015 — FluTrackers archive](https://flutrackers.com/forum/forum/asia/seasonal-flu-2009-2014-including-h1n1-pandemic-2009-ab/singapore-aa/721464-singapore-weekly-infectious-disease-bulletin-2015)
