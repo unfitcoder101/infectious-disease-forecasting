@@ -2,3 +2,4 @@ series,observations,aligned_rows,min_train,test_block_weeks,n_folds,unused_test_
 San Juan,936,924,646,13,21,5
 Iquitos,520,508,355,13,11,10
 Singapore,574,562,393,13,13,0
+"Rio de Janeiro, Brazil",835,823,576,13,19,0

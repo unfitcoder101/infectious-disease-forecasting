@@ -221,6 +221,7 @@ with st.sidebar:
         pip install -r requirements.txt
         python run_experiment.py            # San Juan (default)
         python run_experiment.py --city iq  # Iquitos
+        python followup_experiments/run_change_forecast.py --execute  # final four-series study
         ```
         """
     )
@@ -991,10 +992,20 @@ with tab_followup:
         "Values below 1 are lower error than persistence. Counts and errors are "
         "kept separate by dataset."
     )
-    selected_series = st.selectbox("Dengue series", ["San Juan", "Iquitos", "Singapore"], key="followup_series")
+    selected_series = st.selectbox(
+        "Dengue series",
+        ["San Juan", "Iquitos", "Singapore", "Rio de Janeiro, Brazil"],
+        key="followup_series",
+    )
+    series_slug = {
+        "San Juan": "san_juan",
+        "Iquitos": "iquitos",
+        "Singapore": "singapore",
+        "Rio de Janeiro, Brazil": "rio_de_janeiro_brazil",
+    }[selected_series]
     fsummary = load_followup_csv("all_models_relative_mae_summary.csv")
     fsummary = fsummary[fsummary["series"] == selected_series].copy()
-    st.image(str(followup_fig(f"{selected_series.lower().replace(' ', '_')}_relative_mae.png")), width="stretch")
+    st.image(str(followup_fig(f"{series_slug}_relative_mae.png")), width="stretch")
     st.subheader("Case-scale errors and relative MAE")
     st.dataframe(
         fsummary[["method", "model", "history_window", "n_oos", "MAE", "RMSE",
@@ -1002,7 +1013,7 @@ with tab_followup:
         width="stretch", hide_index=True,
     )
     st.subheader("Diebold–Mariano tests on pointwise absolute errors")
-    dm_file = f"dm_tests_{selected_series.lower().replace(' ', '_')}.csv"
+    dm_file = f"dm_tests_{series_slug}.csv"
     fdm = load_followup_csv(dm_file)
     st.dataframe(
         fdm[["comparison", "method", "model", "history_window", "short_window", "long_window",
@@ -1011,10 +1022,11 @@ with tab_followup:
         width="stretch", hide_index=True,
     )
     st.caption(
-        "Holm correction is applied across all 24 comparisons within this series. "
-        "The best-short/best-long comparison chooses configurations on the same "
-        "out-of-sample weeks it tests, so those p-values are exploratory. See "
-        "followup_experiments/research_update.md for the DM assumptions and caveats."
+        "Holm correction is applied across all 28 comparisons within this series: "
+        "20 model/window comparisons against persistence and 8 pre-specified "
+        "history contrasts (1 vs 12 weeks and 4 vs 12 weeks). No adjusted test "
+        "was significant in any of the four series. See "
+        "followup_experiments/research_update.md for the test details and caveats."
     )
     st.subheader("Selected seasonality sensitivity")
     fseason = load_followup_csv("seasonality_sensitivity.csv")
@@ -1026,8 +1038,10 @@ with tab_followup:
         ].round(3), width="stretch", hide_index=True,
     )
     st.markdown(
-        "**Interpretation:** the analysis did not identify a history window that "
-        "wins consistently. Log-change prediction helped Singapore relative to "
-        "direct-count prediction, but persistence still had lower MAE. See the "
-        "full tables and report in `followup_experiments/`."
+        "**Conclusion:** Extending history beyond the most recent week gave no "
+        "detectable improvement, and no configuration significantly outperformed "
+        "persistence. The lowest observed point estimate varies by series and is "
+        "not a statistically confirmed winner. This does not prove that the "
+        "windows are equivalent. See the full tables and limitations in "
+        "`followup_experiments/research_update.md`."
     )

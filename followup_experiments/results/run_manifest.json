@@ -19,5 +19,9 @@
   ],
   "train_fraction": 0.7,
   "test_block_weeks": 13,
-  "statistical_test": "Diebold-Mariano, absolute-error loss, horizon=1, HLN small-sample correction; Holm across all tests within each series"
+  "statistical_test": "Diebold-Mariano, absolute-error loss, Newey-West HAC variance lag=4, horizon=1 HLN correction; Holm across 28 tests within each series",
+  "prespecified_window_comparisons": [
+    "1 vs 12",
+    "4 vs 12"
+  ]
 }
