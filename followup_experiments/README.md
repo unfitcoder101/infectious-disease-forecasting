@@ -1,31 +1,30 @@
-# Level versus change forecast follow-up
+# History-window and log-change forecasting follow-up
 
-This add-on follows the instructor's checklist. It does not overwrite the original `results/`, `singapore_analysis/results/`, or `brazil_analysis/results/` outputs.
+This reproducible follow-up compares history-window length for one-week-ahead dengue forecasts. It includes San Juan, Iquitos, Singapore, and Rio de Janeiro, Brazil in the same pipeline. The original result folders and inputs are preserved.
 
 ## Run
 
-From the repository root, install the existing pinned requirements plus the follow-up SciPy pin, then run:
+From the repository root:
 
 ```bash
 python followup_experiments/run_change_forecast.py --execute
 ```
 
-The script fixes Python/NumPy/model seeds at 42. It uses the existing model factory and hyperparameters, 1/2/4/8/12-week lag windows, an expanding 70% training window, and 13-week non-overlapping rolling-origin test blocks. All models and both target formulations share the same test points within each series. The number of folds follows from the series length; they are 21 for San Juan, 11 for Iquitos and 13 for Singapore.
+The run fixes Python, NumPy, and model seeds at 42; uses the existing XGBoost/LightGBM settings; compares 1/2/4/8/12 lag weeks; and evaluates an expanding 70% initial training set with non-overlapping 13-week test blocks. Direct-level, log-change, and persistence forecasts share the same test dates within each series.
+
+## Statistical analysis
+
+Diebold–Mariano tests use pointwise absolute-error differences, Newey–West Bartlett HAC variance with lag 4, the horizon-1 Harvey–Leybourne–Newbold correction, and Holm adjustment within each series. Each series has 28 tests: 20 model/target/window comparisons against persistence plus eight prespecified history contrasts (1 vs. 12 and 4 vs. 12 for each model and target). Seasonality is a sensitivity analysis on selected short and long configurations.
 
 ## Outputs
 
-- `results/run_manifest.json`: Python, package, platform, seed and fold configuration.
-- `results/fold_plan_summary.csv`: aligned row counts and fold counts by series.
-- `results/oos_predictions.csv`: each point-level forecast, its absolute/squared error and configuration relative MAE.
-- `results/all_models_relative_mae_summary.csv`: case-scale MAE/RMSE and relative errors for persistence, all direct-count configurations and the selected seasonal configurations.
-- `results/dm_tests_{san_juan,iquitos,singapore}.csv`: 20 comparisons against persistence plus four best-short versus best-long comparisons per series, pointwise absolute-error DM test, h=1, and Holm adjustment within series.
-- `results/seasonality_sensitivity.csv`: reruns of only each target/model's best short and best long window with sine/cosine week-of-year inputs.
-- `figures/{san_juan,iquitos,singapore}_relative_mae.png`: relative MAE by window for level and change targets.
+- `results/run_manifest.json`: runtime and package versions, seeds, folds, and test protocol.
+- `results/fold_plan_summary.csv`: aligned rows and fold counts.
+- `results/oos_predictions.csv`: point forecasts and errors.
+- `results/all_models_relative_mae_summary.csv`: MAE, RMSE, and relative MAE for model configurations and persistence.
+- `results/dm_tests_{san_juan,iquitos,singapore,rio_de_janeiro_brazil}.csv`: per-series HAC/HLN tests and Holm-adjusted p-values.
+- `results/seasonality_sensitivity.csv`: selected seasonal sensitivity results.
+- `figures/relative_mae_by_window_all_series.png`: relative MAE by window across the four settings.
+- `figures/singapore_fold_errors_and_peaks.png`: Singapore fold errors and peak weeks.
 
-Detailed findings and limitations are in `research_update.md`. The pointwise DM assumptions and post-selection limitation for the best-short/best-long comparisons are stated there and in the per-series result files.
-
-## Environment
-
-Use Python **3.12.5**. `requirements.txt` pins the original model stack; `requirements-followup.txt` adds the SciPy version used for the DM tests. The run manifest records the exact versions used in the saved run.
-
-The prior result tables and figures were also regenerated and audited; see `reproduction_audit.md`. The Singapore source overlap outputs are reproducible with `python singapore_analysis/check_overlap.py`.
+The current findings and limitations are in `research_update.md`. Across all four series, no test was significant after correction; the conclusion is no detectable history-window gain and no significant improvement over persistence.

@@ -1,4 +1,4 @@
-"""Reproducible level-vs-change forecasting follow-up for three dengue series.
+"""Reproducible level-vs-change forecasting follow-up for four dengue series.
 
 Uses the original XGBoost/LightGBM models, fixed parameters, 1/2/4/8/12
 history windows, persistence baseline, expanding 70% training window and
@@ -10,6 +10,7 @@ import argparse
 import json
 import platform
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -25,12 +26,14 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 sys.path.insert(0, str(ROOT / 'singapore_analysis'))
+sys.path.insert(0, str(ROOT / 'brazil_analysis'))
 from data_loader import load_raw, CITIES
 from evaluation import rolling_origin_splits
 from features import HISTORY_WINDOWS, build_aligned_tables
 from models import RANDOM_SEED, get_models
 from preprocessing import preprocess
 from singapore_data import load_singapore
+from brazil_data import load_raw as load_brazil_raw
 
 OUT = Path(__file__).resolve().parent
 RESULTS = OUT / 'results'
@@ -45,6 +48,7 @@ def get_series():
         'San Juan': preprocess(load_raw('sj')),
         'Iquitos': preprocess(load_raw('iq')),
         'Singapore': load_singapore(),
+        'Rio de Janeiro, Brazil': load_brazil_raw(),
     }
     # Use the original MOH epi-week number for Singapore seasonal features.
     sg = pd.read_csv(ROOT / 'data/raw/singapore_dengue_fever_weekly_clean.csv')
@@ -134,22 +138,28 @@ def summarize(oos):
         ['series','method','model','history_window']).reset_index(drop=True)
 
 
-def dm_h1(a, b):
-    """Two-sided DM test on pointwise absolute errors, h=1, HLN small-sample correction.
+def dm_hac(a, b, hac_lag=4):
+    """Two-sided DM test on pointwise absolute errors with NW-HAC and HLN.
 
-    h=1 means the forecast-error differential variance uses lag zero (no
-    overlapping-horizon autocovariance correction). The common weekly series
-    may still have serial dependence; this assumption is recorded in the report.
+    The Bartlett-kernel Newey-West long-run variance includes autocovariances
+    through `hac_lag`; the horizon-1 HLN factor provides the requested
+    small-sample correction.
     """
     d = np.asarray(a, float) - np.asarray(b, float)
     d = d[np.isfinite(d)]
     n = len(d)
     if n < 3 or np.allclose(d, d[0]):
         return float(np.nan), float(np.nan), n
-    var = d.var(ddof=1)
-    if var == 0:
+    centered = d - d.mean()
+    gamma0 = float(np.dot(centered, centered) / n)
+    long_run_var = gamma0
+    for lag in range(1, min(hac_lag, n - 1) + 1):
+        gamma = float(np.dot(centered[lag:], centered[:-lag]) / n)
+        weight = 1.0 - lag / (hac_lag + 1.0)
+        long_run_var += 2.0 * weight * gamma
+    if long_run_var <= 0 or not np.isfinite(long_run_var):
         return float(np.nan), float(np.nan), n
-    dm = d.mean() / np.sqrt(var / n)
+    dm = d.mean() / np.sqrt(long_run_var / n)
     hln = np.sqrt((n + 1 - 2*1 + 1*(1-1)/n) / n)
     stat = dm * hln
     p = 2 * stats.t.sf(abs(stat), df=n-1)
@@ -174,25 +184,23 @@ def make_dm_table(oos, summary, series_name):
             for w in HISTORY_WINDOWS:
                 a=source[(source.method==method)&(source.model==model)&(source.history_window==w)].set_index(['date','fold']).abs_error
                 a,b=a.align(base,join='inner')
-                stat,p,n=dm_h1(a,b)
+                stat,p,n=dm_hac(a,b,4)
                 rows.append(dict(series=series_name,comparison='model/window vs persistence',method=method,model=model,
                                  history_window=w,short_window='',long_window='',n_oos=n,mean_abs_error_difference=float((a-b).mean()),
                                  model_relative_MAE=float(a.mean()/b.mean()),
-                                 DM_statistic=stat,p_value=p))
-    summ=summary[(summary.series==series_name)&summary.method.isin(METHODS)]
+                                 DM_statistic=stat,p_value=p,HAC_lag=4,HLN_horizon=1))
     for method in METHODS:
         for model in ('XGBoost','LightGBM'):
-            sub=summ[(summ.method==method)&(summ.model==model)]
-            short=int(sub[sub.history_window.isin([1,2,4])].sort_values(['MAE','history_window']).iloc[0].history_window)
-            long=int(sub[sub.history_window.isin([8,12])].sort_values(['MAE','history_window']).iloc[0].history_window)
-            a=source[(source.method==method)&(source.model==model)&(source.history_window==short)].set_index(['date','fold']).abs_error
-            b=source[(source.method==method)&(source.model==model)&(source.history_window==long)].set_index(['date','fold']).abs_error
-            a,b=a.align(b,join='inner'); stat,p,n=dm_h1(a,b)
-            rows.append(dict(series=series_name,comparison='best short vs best long (selected by OOS MAE)',method=method,model=model,
-                             short_window=short,long_window=long,n_oos=n,mean_abs_error_difference=float((a-b).mean()),
-                             short_relative_MAE=float(a.mean()/base.loc[a.index].mean()),
-                             long_relative_MAE=float(b.mean()/base.loc[b.index].mean()),
-                             DM_statistic=stat,p_value=p))
+            for short in (1,4):
+                long=12
+                a=source[(source.method==method)&(source.model==model)&(source.history_window==short)].set_index(['date','fold']).abs_error
+                b=source[(source.method==method)&(source.model==model)&(source.history_window==long)].set_index(['date','fold']).abs_error
+                a,b=a.align(b,join='inner'); stat,p,n=dm_hac(a,b,4)
+                rows.append(dict(series=series_name,comparison='pre-specified history-window comparison',method=method,model=model,
+                                 short_window=short,long_window=long,n_oos=n,mean_abs_error_difference=float((a-b).mean()),
+                                 short_relative_MAE=float(a.mean()/base.loc[a.index].mean()),
+                                 long_relative_MAE=float(b.mean()/base.loc[b.index].mean()),
+                                 DM_statistic=stat,p_value=p,HAC_lag=4,HLN_horizon=1))
     out=pd.DataFrame(rows)
     out['p_holm_within_series']=holm(out.p_value)
     out['loss_difference_note']='negative mean difference favors first-listed model/configuration'
@@ -268,7 +276,66 @@ def plot_relative(summary, series):
     axs[1].legend(loc='best',fontsize=8)
     fig.suptitle(f'{series}: level and change forecasts on 13-week rolling-origin folds')
     fig.tight_layout()
-    fig.savefig(FIGURES/f'{series.lower().replace(" ","_")}_relative_mae.png',dpi=180,bbox_inches='tight')
+    slug=re.sub(r'[^a-z0-9]+','_',series.lower()).strip('_')
+    fig.savefig(FIGURES/f'{slug}_relative_mae.png',dpi=180,bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_relative_all_series(summary):
+    """Paper figure: relative MAE by history window, one panel per series."""
+    names=list(summary[summary.method.isin(METHODS)].series.drop_duplicates())
+    fig,axes=plt.subplots(2,2,figsize=(7.2,5.4),sharex=True,sharey=True)
+    colors={'level_XGBoost':'#2563a6','level_LightGBM':'#de7130',
+            'change_XGBoost':'#2563a6','change_LightGBM':'#de7130'}
+    styles={'level_XGBoost':'-','level_LightGBM':'-',
+            'change_XGBoost':'--','change_LightGBM':'--'}
+    for ax,name in zip(axes.flat,names):
+        sub=summary[(summary.series==name)&summary.method.isin(METHODS)]
+        for (method,model),g in sub.groupby(['method','model']):
+            key=f'{method}_{model}'
+            ax.plot(g.history_window,g.relative_MAE,marker='o',linewidth=1.5,
+                    color=colors[key],linestyle=styles[key],label=f'{method.title()} {model}')
+        ax.axhline(1,color='black',linestyle=':',linewidth=1.1,label='Persistence = 1')
+        ax.set_title(name,fontsize=9)
+        ax.set_xticks(HISTORY_WINDOWS); ax.grid(alpha=.22)
+    for ax in axes[-1,:]: ax.set_xlabel('History window (weeks)')
+    for ax in axes[:,0]: ax.set_ylabel('Relative MAE')
+    handles,labels=axes.flat[0].get_legend_handles_labels()
+    fig.legend(handles,labels,ncol=3,loc='lower center',bbox_to_anchor=(.5,-.005),fontsize=7,frameon=False)
+    fig.tight_layout(rect=(0,.07,1,1),pad=.8)
+    fig.savefig(FIGURES/'relative_mae_by_window_all_series.png',dpi=300,bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_singapore_fold_error(oos, summary):
+    """Show Singapore fold errors alongside the case peaks in those folds."""
+    name='Singapore'
+    sub=oos[oos.series==name]
+    base=sub[sub.method=='persistence'].groupby('fold').abs_error.mean()
+    fig,(ax_top,ax_err)=plt.subplots(2,1,figsize=(8.4,6.2),sharex=True,
+                                     gridspec_kw={'height_ratios':[1,1.5]})
+    max_cases=sub[sub.method=='persistence'].groupby('fold').y_true.max()
+    fold_numbers=max_cases.index.to_numpy()+1
+    ax_top.bar(fold_numbers,max_cases.values,color='#a7b6c8',alpha=.8)
+    ax_top.set_ylabel('Peak observed cases\nin fold')
+    ax_top.set_title('Singapore: epidemic peaks and one-week-ahead error by test fold')
+    candidates=[]
+    for method,label,color in [('level','Best direct-count model','#2468a2'),
+                               ('change','Best log-change model','#dc6b2f')]:
+        cand=summary[(summary.series==name)&(summary.method==method)]
+        best=cand.sort_values(['MAE','model','history_window']).iloc[0]
+        cfg=sub[(sub.method==method)&(sub.model==best.model)&
+                (sub.history_window==best.history_window)]
+        fold_mae=cfg.groupby('fold').abs_error.mean()
+        ax_err.plot(fold_mae.index+1,fold_mae.values,marker='o',linewidth=1.8,
+                    label=f"{label}: {best.model}, {int(best.history_window)} wk",color=color)
+    ax_err.plot(base.index+1,base.values,marker='o',linewidth=1.8,
+                label='Persistence',color='#282828')
+    ax_err.set_ylabel('Fold MAE (cases)'); ax_err.set_xlabel('13-week test fold')
+    ax_err.grid(alpha=.25); ax_err.legend(fontsize=8,loc='upper left')
+    ax_err.set_xticks(base.index+1)
+    fig.tight_layout()
+    fig.savefig(FIGURES/'singapore_fold_errors_and_peaks.png',dpi=220,bbox_inches='tight')
     plt.close(fig)
 
 
@@ -284,7 +351,8 @@ def main():
               'xgboost':xgboost.__version__,'lightgbm':lightgbm.__version__,
               'random_seed':RANDOM_SEED,'python_random_seed':RANDOM_SEED,'numpy_seed':RANDOM_SEED,
               'history_windows':HISTORY_WINDOWS,'train_fraction':TRAIN_FRAC,'test_block_weeks':BLOCK,
-              'statistical_test':'Diebold-Mariano, absolute-error loss, horizon=1, HLN small-sample correction; Holm across all tests within each series'}
+              'statistical_test':'Diebold-Mariano, absolute-error loss, Newey-West HAC variance lag=4, horizon=1 HLN correction; Holm across 28 tests within each series',
+              'prespecified_window_comparisons':['1 vs 12','4 vs 12']}
     (RESULTS/'run_manifest.json').write_text(json.dumps(versions,indent=2)+'\n')
     data,week_maps=get_series(); all_oos=[]; plans=[]
     for name,series in data.items():
@@ -309,10 +377,13 @@ def main():
     summary.to_csv(RESULTS/'all_models_relative_mae_summary.csv',index=False)
     pd.DataFrame(plans).to_csv(RESULTS/'fold_plan_summary.csv',index=False)
     for name in data:
-        make_dm_table(primary_oos,primary_summary,name).to_csv(RESULTS/f'dm_tests_{name.lower().replace(" ","_")}.csv',index=False)
+        slug=re.sub(r'[^a-z0-9]+','_',name.lower()).strip('_')
+        make_dm_table(primary_oos,primary_summary,name).to_csv(RESULTS/f'dm_tests_{slug}.csv',index=False)
     seas=seasonality_sensitivity(oos,primary_summary)
     seas.to_csv(RESULTS/'seasonality_sensitivity.csv',index=False)
     for name in data: plot_relative(summary,name)
+    plot_relative_all_series(summary)
+    plot_singapore_fold_error(primary_oos,primary_summary)
     print('\nFold plan:'); print(pd.DataFrame(plans).to_string(index=False))
     print('\nPrimary model summaries:'); print(summary[summary.method.isin(METHODS)].round(3).to_string(index=False))
     print('\nSeasonality:'); print(seas.round(3).to_string(index=False))

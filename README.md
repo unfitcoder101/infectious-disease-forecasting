@@ -138,14 +138,12 @@ Source and licence: `data/raw/SOURCE.md`.
 
 ## Brazil external validation
 
-A separate post-hoc run applies the same 1/2/4/8/12-week history experiment to
-InfoDengue reported dengue cases in Rio de Janeiro (2010–2025). It is isolated
-under `brazil_analysis/`; existing data and results are preserved. Four weeks
-had the lowest rolling-origin mean MAE for both models in both fold designs,
-but the 5% rule selected 4 weeks for XGBoost and 1 week for LightGBM. Fold
-variation was large and persistence was competitive. This supports short history
-as a plausible pattern in Rio, but establishes no unique optimum or universal
-result. Brazil's raw errors are not compared with the other settings.
+A separate Brazil-specific analysis is preserved under `brazil_analysis/`. The
+instructor follow-up also includes the Rio de Janeiro InfoDengue reported-case
+series in the common four-series history-window pipeline under
+`followup_experiments/`. This makes Brazil a fourth within-series setting; it is
+not cross-country transfer validation. Raw case errors are not pooled across
+series.
 
 - Reproduce: `python brazil_analysis/run_brazil_experiment.py --execute`
 - Data source, query, date, and checksum: [`brazil_analysis/SOURCE.md`](brazil_analysis/SOURCE.md)
@@ -160,18 +158,19 @@ different disease.
 
 ## Instructor follow-up results
 
-The new level-versus-log-change experiment is complete for San Juan, Iquitos,
-and Singapore. It uses the same 1/2/4/8/12-week lag windows and 13-week
-rolling-origin folds within each series, and reports case-scale and relative
-MAE, pointwise DM tests with Holm adjustment, and a seasonality sensitivity run.
-The change target improved Singapore's best observed model MAE but remained
-worse than persistence. No best-short versus best-long comparison was
-significant after correction, and no universal history window emerged.
+The common level-versus-log-change experiment is complete for San Juan, Iquitos,
+Singapore, and Rio de Janeiro, Brazil. It uses the same 1/2/4/8/12-week lag
+windows and 13-week rolling-origin folds within each series. Diebold–Mariano
+tests use Newey–West HAC lag 4, horizon-1 Harvey–Leybourne–Newbold correction,
+and Holm adjustment. All 28 adjusted tests per series were nonsignificant,
+including the prespecified 1-vs-12 and 4-vs-12 comparisons. No configuration
+significantly outperformed persistence.
 
 Details and all result tables: [`followup_experiments/research_update.md`](followup_experiments/research_update.md).
 Reproduce with `python followup_experiments/run_change_forecast.py --execute`;
-Python 3.12.5 and the exact package versions are recorded in
-`followup_experiments/results/run_manifest.json`.
+Python 3.12.5 and exact package versions are recorded in
+`followup_experiments/results/run_manifest.json`. The IEEE conference-format
+draft is at `outputs/history_window_dengue_forecasting_ieee_draft.docx`.
 
 The Singapore cross-source overlap check is now complete. The separate
 2014–2018 MOH Dengue/DHF table differs in 52 of 261 Dengue weeks; the wider MOH
